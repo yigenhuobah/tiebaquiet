@@ -1,0 +1,326 @@
+{
+  "appVersion": "22.12.1.0",
+  "versionCode": 369885440,
+  "generatedBy": "tools/gen_anchors.py",
+  "anchors": {
+    "splash_forbid_b": {
+      "c": "com.baidu.tieba.ad.under.utils.SplashForbidAdHelperKt",
+      "m": "b",
+      "s": "()Z"
+    },
+    "yun_dialog_can_show": {
+      "c": "com.baidu.tbadk.core.dialog.yun.YunDialogManager",
+      "m": "canShowDialog",
+      "s": "(Lcom/baidu/tieba/od6;)Z"
+    },
+    "home_ad_float": {
+      "c": "com.baidu.tbadk.TbSingleton",
+      "m": "getHomeAdFloatViewItemData",
+      "s": "()Lcom/baidu/tieba/fo6;"
+    },
+    "pb_ad_float": {
+      "c": "com.baidu.tbadk.TbSingleton",
+      "m": "getPbAdFloatViewItemData",
+      "s": "()Lcom/baidu/tieba/fo6;"
+    },
+    "template_set_list": {
+      "c": "com.baidu.tieba.feed.list.TemplateAdapter",
+      "m": "setList",
+      "s": "(Ljava/util/List;)V"
+    },
+    "tab_add_tip": {
+      "c": "com.baidu.tbadk.mainTab.TbFragmentTabIndicator",
+      "m": "addTip",
+      "s": "(Ljava/lang/String;Lcom/baidu/tbadk/mainTab/TbFragmentTabIndicator$FragmentTapTip;)V"
+    },
+    "tab_add_tip_2": {
+      "c": "com.baidu.tbadk.mainTab.FragmentTabIndicator",
+      "m": "addTip",
+      "s": "(Ljava/lang/String;Lcom/baidu/tbadk/mainTab/TbFragmentTabIndicator$FragmentTapTip;)V"
+    },
+    "tab_add_tip_3": {
+      "c": "com.baidu.tbadk.mainTab.MainTabBottomOptIndicator",
+      "m": "addTip",
+      "s": "(Ljava/lang/String;Lcom/baidu/tbadk/mainTab/TbFragmentTabIndicator$FragmentTapTip;)V"
+    },
+    "tab_add_tip_4": {
+      "c": "com.baidu.tbadk.mainTab.MaintabBottomIndicator",
+      "m": "addTip",
+      "s": "(Ljava/lang/String;Lcom/baidu/tbadk/mainTab/TbFragmentTabIndicator$FragmentTapTip;)V"
+    },
+    "tab_add_tip_wrap": {
+      "c": "com.baidu.tbadk.mainTab.TbFragmentTabIndicator",
+      "m": "addTipWrapContent",
+      "s": "(Ljava/lang/String;Lcom/baidu/tbadk/mainTab/TbFragmentTabIndicator$FragmentTapTip;)V"
+    },
+    "msg_red_dot_refresh": {
+      "c": "com.baidu.tbadk.core.view.MessageRedDotView",
+      "m": "refresh",
+      "s": "(I)V"
+    },
+    "msg_red_dot_refresh_opt": {
+      "c": "com.baidu.tbadk.core.view.MessageRedDotView",
+      "m": "refreshFeedUIOpt",
+      "s": "(I)V"
+    },
+    "msg_red_dot_refresh_str": {
+      "c": "com.baidu.tbadk.core.view.MessageRedDotView",
+      "m": "refresh",
+      "s": "(Ljava/lang/String;Z)V"
+    },
+    "rec_forum_strategy_h": {
+      "c": "com.baidu.tieba.forum.strategy.RecommendForumShowStrategy",
+      "m": "h",
+      "s": "(Lcom/baidu/tieba/y7a;)Z"
+    },
+    "upgrade_pop": {
+      "c": "com.baidu.tbadk.core.util.UpgradePopWindowHelper",
+      "m": "showPopWindow",
+      "s": "(Lcom/baidu/tbadk/TbPageContext;Lcom/baidu/tieba/op6;)V"
+    },
+    "easter_egg_o": {
+      "c": "com.baidu.tieba.easteregg.EasterEggAdController",
+      "m": "o",
+      "s": "(Lcom/baidu/tieba/easteregg/data/EasterEggAdData;)V"
+    },
+    "new_scroll_r": {
+      "c": "com.baidu.tieba.homepage.framework.indicator.NewScrollFragmentAdapter",
+      "m": "r",
+      "s": "(Landroid/content/Context;Ljava/util/List;)V"
+    },
+    "skin_type": {
+      "c": "com.baidu.tbadk.core.TbadkCoreApplication",
+      "m": "getSkinType",
+      "s": "()I"
+    },
+    "forum_res_parser_a": {
+      "c": "com.baidu.tieba.forum.data.protobuf.BaseForumResParser",
+      "m": "a",
+      "s": "(Ljava/lang/Object;Lcom/baidu/tieba/ej9;Ljava/util/Map;ZLjava/util/Map;)Ljava/util/List;"
+    },
+    "nt9_d": {
+      "c": "com.baidu.tieba.nt9",
+      "m": "d",
+      "s": "()Ljava/lang/Object;"
+    },
+    "nt9_b": {
+      "c": "com.baidu.tieba.nt9",
+      "m": "b",
+      "s": "()Ljava/lang/String;"
+    },
+    "thread_get_is_live": {
+      "c": "com.baidu.tbadk.core.data.ThreadData",
+      "m": "getIsLive",
+      "s": "()I"
+    },
+    "thread_is_interview_live": {
+      "c": "com.baidu.tbadk.core.data.ThreadData",
+      "m": "isInterviewLive",
+      "s": "()Z"
+    },
+    "thread_is_live_thread": {
+      "c": "com.baidu.tbadk.core.data.ThreadData",
+      "m": "isLiveThread",
+      "s": "()Z"
+    },
+    "thread_is_live_interview_type": {
+      "c": "com.baidu.tbadk.core.data.ThreadData",
+      "m": "isLiveInterviewLiveType",
+      "s": "()Z"
+    },
+    "thread_is_interview_live_style": {
+      "c": "com.baidu.tbadk.core.data.ThreadData",
+      "m": "isInterviewLiveStyle",
+      "s": "()Z"
+    },
+    "thread_is_ala_live_user": {
+      "c": "com.baidu.tbadk.core.data.ThreadData",
+      "m": "isAlaLiveUser",
+      "s": "()Z"
+    },
+    "ala_info_yy_live": {
+      "c": "com.baidu.tbadk.core.data.AlaInfoData",
+      "m": "getIsYYLiveUi",
+      "s": "()Z"
+    },
+    "thread_ala_info": {
+      "c": "com.baidu.tbadk.core.data.ThreadData",
+      "m": "getThreadAlaInfo",
+      "s": "()Lcom/baidu/tbadk/core/data/AlaInfoData;"
+    },
+    "em8_get_thread": {
+      "c": "com.baidu.tieba.em8",
+      "m": "getThreadData",
+      "s": "()Lcom/baidu/tbadk/core/data/ThreadData;"
+    },
+    "live_adapter_fill": {
+      "c": "com.baidu.tieba.homepage.personalize.adapter.HomePageAlaLiveThreadAdapter",
+      "m": "onFillViewHolder",
+      "s": "(ILandroid/view/View;Landroid/view/ViewGroup;Ljava/lang/Object;Lcom/baidu/adp/widget/ListView/TypeAdapter$ViewHolder;)Landroid/view/View;"
+    },
+    "ala_live_card_bind": {
+      "c": "com.baidu.tieba.compact.AlaLiveAttentionCardView",
+      "m": "c",
+      "s": "(Lcom/baidu/tieba/rl8;)V"
+    },
+    "live_card_create": {
+      "c": "com.baidu.tieba.ssb",
+      "m": "a",
+      "s": "(Landroid/view/ViewGroup;I)Landroid/view/View;"
+    },
+    "live_item_16_set_data": {
+      "c": "com.baidu.live.business.Live16Ratio9ItemView",
+      "m": "setData",
+      "s": "(Lcom/baidu/live/business/model/data/LiveRoomEntity;I)V"
+    },
+    "live_item_45_set_data": {
+      "c": "com.baidu.live.business.Live4Ratio5ItemView",
+      "m": "setData",
+      "s": "(Lcom/baidu/live/business/model/data/LiveRoomEntity;I)V"
+    },
+    "thread_ad_url": {
+      "c": "com.baidu.tbadk.core.data.ThreadData",
+      "m": "getAd_url",
+      "s": "()Ljava/lang/String;"
+    },
+    "thread_ad_subscript": {
+      "c": "com.baidu.tbadk.core.data.ThreadData",
+      "m": "getShowAdSubscript",
+      "s": "()Z"
+    },
+    "thread_is_bjh": {
+      "c": "com.baidu.tbadk.core.data.ThreadData",
+      "m": "isBjh",
+      "s": "()Z"
+    },
+    "thread_is_smartapp": {
+      "c": "com.baidu.tbadk.core.data.ThreadData",
+      "m": "isSmartAppThreadType",
+      "s": "()Z"
+    },
+    "thread_is_live": {
+      "c": "com.baidu.tbadk.core.data.ThreadData",
+      "m": "isAlaLiveMixThreadType",
+      "s": "()Z"
+    },
+    "thread_is_act": {
+      "c": "com.baidu.tbadk.core.data.ThreadData",
+      "m": "isActInfo",
+      "s": "()Z"
+    },
+    "thread_is_ugc": {
+      "c": "com.baidu.tbadk.core.data.ThreadData",
+      "m": "isUgcThreadType",
+      "s": "()Z"
+    },
+    "pid_loader_load": {
+      "c": "com.fun.ad.sdk.internal.api.BasePidLoader",
+      "m": "load",
+      "s": "(Landroid/content/Context;Lcom/fun/ad/sdk/FunAdSlot;Lcom/fun/ad/sdk/internal/api/SidSessionMeta;)Z"
+    },
+    "nad_requester_a": {
+      "c": "com.baidu.nadcore.requester.NadRequester",
+      "m": "a",
+      "s": "(Lcom/baidu/nadcore/requester/RequestParameters;Lcom/baidu/nadcore/requester/NadRequester$b;)V"
+    },
+    "qy8_c": {
+      "c": "com.baidu.tieba.qy8",
+      "m": "c",
+      "s": "(Lcom/baidu/tieba/c18;Lcom/baidu/tieba/i18;)V"
+    },
+    "add_lz": {
+      "c": "com.baidu.tieba.pb.pagebrowser.net.PageBrowserRequestMessage",
+      "m": "addLz",
+      "s": "(Ltbclient/PbList/DataReq$Builder;)V"
+    },
+    "add_r": {
+      "c": "com.baidu.tieba.pb.pagebrowser.net.PageBrowserRequestMessage",
+      "m": "addR",
+      "s": "(Ltbclient/PbList/DataReq$Builder;)V"
+    },
+    "big_image_loader": {
+      "c": "com.baidu.tbadk.core.util.resourceLoaderProc.BigImageLoaderProc",
+      "m": "getFromRemote",
+      "s": "(Ljava/lang/String;Ljava/lang/String;IILcom/baidu/tieba/q8;[Ljava/lang/Object;)Ljava/lang/Object;"
+    },
+    "save_image": {
+      "c": "com.baidu.tbadk.core.util.FileHelper",
+      "m": "saveImageFileByUser",
+      "s": "(Ljava/lang/String;[BLandroid/content/Context;)I"
+    },
+    "watermark_type": {
+      "c": "com.baidu.tieba.j76",
+      "m": "b",
+      "s": "()I"
+    },
+    "original_button": {
+      "c": "com.baidu.tbadk.coreExtra.view.UrlDragImageView",
+      "m": "W",
+      "s": "()Z"
+    },
+    "video_set_path": {
+      "c": "com.baidu.tieba.play.TbVideoView",
+      "m": "setVideoPath",
+      "s": "(Ljava/lang/String;Ljava/lang/String;)V"
+    },
+    "sign_all_load": {
+      "c": "com.baidu.tieba.signall.SignAllForumModel",
+      "m": "loadData",
+      "s": "()Z"
+    },
+    "sign_single_y0": {
+      "c": "com.baidu.tieba.signall.SignSingleModel",
+      "m": "Y0",
+      "s": "(Ljava/lang/String;Ljava/lang/String;)V"
+    },
+    "clipboard": {
+      "c": "com.baidu.tbadk.core.util.UtilHelper",
+      "m": "getClipBoardContent",
+      "s": "()Ljava/lang/String;"
+    },
+    "personalized_ad": {
+      "c": "com.baidu.tbadk.TbSingleton",
+      "m": "getPersonalizedAdSwitch",
+      "s": "()I"
+    },
+    "keep_alive": {
+      "c": "com.baidu.tieba.ala.ALaKeepAliveService",
+      "m": "startService",
+      "s": "(Landroid/content/Context;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V"
+    },
+    "ad_insert_gate": {
+      "c": "com.baidu.tieba.dw7",
+      "m": "n",
+      "s": "(Lcom/baidu/tieba/ad/AbsDataRecorder$Scene;)Z"
+    },
+    "ad_card_gate": {
+      "c": "com.baidu.tieba.bie",
+      "m": "h",
+      "s": "(Lcom/baidu/tbadk/core/data/AdvertAppInfo;)Z"
+    },
+    "webview_page_finished": {
+      "c": "com.baidu.webkit.sdk.system.WebViewClientWrapper",
+      "m": "onPageFinished",
+      "s": "(Landroid/webkit/WebView;Ljava/lang/String;)V"
+    },
+    "tbwebview_load_url": {
+      "c": "com.baidu.tieba.browser.TbWebView",
+      "m": "loadUrl",
+      "s": "(Ljava/lang/String;)V"
+    },
+    "person_tab_attach": {
+      "c": "com.baidu.tieba.personTab.controller.PersonTabWebController",
+      "m": "z",
+      "s": "(Landroid/view/View;Landroid/os/Bundle;)V"
+    }
+  },
+  "classes": {
+    "nt9": "com.baidu.tieba.nt9",
+    "advert_app_info": "com.baidu.tbadk.core.data.AdvertAppInfo",
+    "thread_data": "com.baidu.tbadk.core.data.ThreadData",
+    "lego_ad_card": "com.baidu.tieba.recapp.lego.model.AdCard",
+    "lego_ad_data": "com.baidu.tieba.oke",
+    "lego_ad_wrapper": "com.baidu.tieba.gje$a",
+    "live_thread_wrapper": "com.baidu.tieba.em8"
+  }
+}
