@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    主设置页：状态卡 -> 异常横幅 -> 一键签到 -> AD/UI/PV/EN 分组 -> 诊断/关于入口 -> 页脚。
+    每个功能行的 android:key 必须与 UiFeature.key 完全一致；
+    标题/摘要由 SettingsFragment 从 UiFeature 注入，这里只声明 key 与分组图标。
+-->
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <Preference
+        android:key="status"
+        android:layout="@layout/preference_status_card"
+        android:selectable="false"
+        android:title="@string/status_title" />
+
+    <Preference
+        android:key="warning"
+        android:layout="@layout/preference_warning_banner"
+        android:selectable="false"
+        android:visible="false" />
+
+    <Preference
+        android:key="action_sign_in"
+        android:summary="@string/action_sign_in_summary"
+        android:title="@string/action_sign_in" />
+
+    <PreferenceCategory android:title="@string/group_ad">
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_ad"
+            android:key="splash_no_ad" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_ad"
+            android:key="ad_request_block" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_ad"
+            android:key="feed_ad_filter" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_ad"
+            android:key="forum_promo_filter" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_ad"
+            android:key="live_card_filter" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_ad"
+            android:key="hot_card_filter" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_ad"
+            android:key="float_ad" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_ad"
+            android:key="yun_dialog" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_ad"
+            android:key="rec_forum" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_ad"
+            android:key="easter_egg" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/group_ui">
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_ui"
+            android:key="tab_red_dot" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_ui"
+            android:key="update_dialog" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_ui"
+            android:key="profile_cleanup" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/group_pv">
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_pv"
+            android:key="clipboard_guard" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_pv"
+            android:key="personalized_ad_off" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_pv"
+            android:key="keep_alive_block" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/group_en">
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_en"
+            android:key="default_channel" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_en"
+            android:key="force_night" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_en"
+            android:key="host_only" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_en"
+            android:key="reverse_order" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_en"
+            android:key="no_watermark" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_en"
+            android:key="original_image" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_en"
+            android:key="video_link" />
+
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_en"
+            android:key="one_key_sign" />
+
+    </PreferenceCategory>
+
+    <Preference
+        android:key="page_diagnostics"
+        android:summary="@string/page_diagnostics_summary"
+        android:title="@string/page_diagnostics" />
+
+    <Preference
+        android:key="page_about"
+        android:summary="@string/page_about_summary"
+        android:title="@string/page_about" />
+
+    <Preference
+        android:key="footer"
+        android:layout="@layout/preference_footer"
+        android:selectable="false" />
+
+</PreferenceScreen>

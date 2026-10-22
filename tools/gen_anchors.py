@@ -4,7 +4,7 @@
 
 用法:
     python tools/gen_anchors.py --apk "E:/download/base(3).apk" \
-        --out module/src/main/resources/anchors.json
+        --out app/src/main/resources/anchors.json
 """
 import argparse
 import json

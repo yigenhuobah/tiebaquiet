@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">贴吧静净 (TiebaQuiet)</string>
+    <string name="app_subtitle">v%1$s</string>
+    <string name="app_description">百度贴吧体验优化：去广告、界面精简、功能增强与隐私保护</string>
+    <string name="app_target_name">百度贴吧</string>
+
+    <!-- 状态卡 -->
+    <string name="status_title">模块状态</string>
+    <string name="status_connecting">正在连接框架…</string>
+    <string name="status_inactive">未激活</string>
+    <string name="status_connected">框架已连接</string>
+    <string name="status_active">已激活</string>
+    <string name="status_detail_connecting">目标 %1$s · 绑定成功后自动刷新</string>
+    <string name="status_detail_no_scope">框架 API %1$d · 在 LSPosed 中启用模块并勾选%2$s · 目标 %3$s · v%4$s</string>
+    <string name="status_detail_not_running">框架 API %1$d · 启动%2$s后生效 · 目标 %3$s · v%4$s</string>
+    <string name="status_detail_active">框架 API %1$d · 已注入%2$s · 目标 %3$s · v%4$s</string>
+    <string name="status_unknown_version">未知</string>
+    <string name="status_remote_ok">remote prefs：可用，开关改动目标进程可读</string>
+    <string name="status_remote_fail">remote prefs：不可用，开关不可用</string>
+    <string name="status_banner_version">目标应用版本 %1$s 未适配（适配版本 %2$s）。功能可能失效。</string>
+    <string name="status_banner_failed">%1$d 项功能未生效。打开诊断页查看 skip 原因。</string>
+
+    <!-- 分组 -->
+    <string name="group_ad">广告净化</string>
+    <string name="group_ui">界面精简</string>
+    <string name="group_pv">隐私保护</string>
+    <string name="group_en">功能增强</string>
+    <string name="group_ex">实验功能</string>
+
+    <!-- 二级页入口 -->
+    <string name="page_diagnostics">诊断</string>
+    <string name="page_diagnostics_summary">逐功能查看挂载与命中</string>
+    <string name="page_about">关于</string>
+    <string name="page_about_summary">版本、源码与四模块互链</string>
+
+    <!-- 页脚 -->
+    <string name="footer_restart">修改后重启%1$s生效</string>
+    <string name="footer_compat">仅保证%1$s %2$s，其它版本尽力而为</string>
+
+    <!-- 诊断页 -->
+    <string name="diag_title">诊断</string>
+    <string name="diag_placeholder">当前版本尚未接入诊断回传，暂不展示逐功能状态</string>
+    <string name="diag_hint">数据来自目标进程回传。registered=挂载成功，hit=命中次数，skip=跳过原因</string>
+    <string name="diag_empty_title">暂无诊断数据</string>
+    <string name="diag_empty">启动%1$s后重新进入本页</string>
+    <string name="diag_refresh">刷新</string>
+    <string name="diag_refresh_summary">最近刷新：%1$s</string>
+    <string name="diag_copy">复制诊断信息</string>
+    <string name="diag_copy_summary">复制全部功能的 registered/hit/skip</string>
+    <string name="diag_copied">诊断信息已复制</string>
+    <string name="diag_blocked">暂不支持：%1$s</string>
+    <string name="diag_no_data">—</string>
+    <string name="f_blocked_summary">暂不支持：%1$s</string>
+
+    <!-- 功能：AD 广告净化 -->
+    <string name="f_splash_no_ad_title">无开屏广告</string>
+    <string name="f_splash_no_ad_summary">复用官方禁开屏开关，启动不再加载广告</string>
+    <string name="f_ad_request_block_title">广告请求源头掐断</string>
+    <string name="f_ad_request_block_summary">FunAd/Nad/getFeedAd 三类广告请求不再发出</string>
+    <string name="f_feed_ad_filter_title">信息流广告卡</string>
+    <string name="f_feed_ad_filter_summary">过滤首页/吧内/评论列表中的广告与推广卡片</string>
+    <string name="f_forum_promo_filter_title">吧页推广卡</string>
+    <string name="f_forum_promo_filter_summary">过滤吧页面解析出的推广/活动卡片</string>
+    <string name="f_live_card_filter_title">直播卡过滤</string>
+    <string name="f_live_card_filter_summary">信息流中不再展示“直播中/开播”卡片</string>
+    <string name="f_hot_card_filter_title">实时热点卡过滤</string>
+    <string name="f_hot_card_filter_summary">信息流中不再展示“实时热点”卡片</string>
+    <string name="f_float_ad_title">悬浮广告</string>
+    <string name="f_float_ad_summary">隐藏首页与帖子页的悬浮广告浮标</string>
+    <string name="f_yun_dialog_title">营销与活动弹窗</string>
+    <string name="f_yun_dialog_summary">关闭云端下发的活动、签到、营销类弹窗</string>
+    <string name="f_rec_forum_title">推荐吧卡</string>
+    <string name="f_rec_forum_summary">不展示“推荐吧/常逛吧”推广卡片</string>
+    <string name="f_easter_egg_title">彩蛋广告</string>
+    <string name="f_easter_egg_summary">关闭节日彩蛋类广告弹层</string>
+
+    <!-- 功能：UI 界面精简 -->
+    <string name="f_tab_red_dot_title">底部 Tab 红点</string>
+    <string name="f_tab_red_dot_summary">隐藏底部导航的红点与角标</string>
+    <string name="f_update_dialog_title">更新弹窗</string>
+    <string name="f_update_dialog_summary">拦截“发现新版本”强制更新弹窗</string>
+    <string name="f_profile_cleanup_title">个人中心精简</string>
+    <string name="f_profile_cleanup_summary">隐藏“我的”页的会员横幅、钱包、任务赚贴贝与游戏专区</string>
+
+    <!-- 功能：EN 功能增强 -->
+    <string name="f_default_channel_title">频道栏默认关注</string>
+    <string name="f_default_channel_summary">把“关注”频道排到首页频道栏第一位</string>
+    <string name="f_force_night_title">强制夜间模式</string>
+    <string name="f_force_night_summary">固定使用夜间皮肤（4）</string>
+    <string name="f_host_only_title">只看楼主</string>
+    <string name="f_host_only_summary">帖子页请求始终按只看楼主过滤</string>
+    <string name="f_reverse_order_title">楼层倒序</string>
+    <string name="f_reverse_order_summary">帖子楼层按倒序加载</string>
+    <string name="f_no_watermark_title">图片去水印</string>
+    <string name="f_no_watermark_summary">图片加载不再附加用户名/吧名水印</string>
+    <string name="f_original_image_title">原图入口常显</string>
+    <string name="f_original_image_summary">图片查看器始终显示“查看原图”入口</string>
+    <string name="f_video_link_title">视频直链复制</string>
+    <string name="f_video_link_summary">播放视频时自动复制直链到剪贴板</string>
+    <string name="f_one_key_sign_title">一键签到</string>
+    <string name="f_one_key_sign_summary">设置页按钮触发贴吧自带的全部吧签到</string>
+
+    <!-- 功能：PV 隐私保护 -->
+    <string name="f_clipboard_guard_title">剪贴板保护</string>
+    <string name="f_clipboard_guard_summary">贴吧不再读取剪贴板内容（口令/图片口令失效）</string>
+    <string name="f_personalized_ad_off_title">个性化广告强制关闭</string>
+    <string name="f_personalized_ad_off_summary">忽略设置项，始终按“关闭个性化广告”运行</string>
+    <string name="f_keep_alive_block_title">保活服务拦截</string>
+    <string name="f_keep_alive_block_summary">阻止 ALa 保活服务启动，减少后台驻留</string>
+
+    <!-- 关于页 -->
+    <string name="about_title">关于</string>
+    <string name="about_version">版本 %1$s（%2$d）</string>
+    <string name="about_target">目标应用</string>
+    <string name="about_target_value">%1$s（%2$s）· 适配 %3$s</string>
+    <string name="about_source">源码</string>
+    <string name="about_source_summary">%1$s</string>
+    <string name="about_links_title">模块互链</string>
+    <string name="about_links_summary">点击模块名打开 GitHub 仓库</string>
+    <string name="about_current_mark">（当前）</string>
+    <string name="about_module_cloudmusictool">云音乐工具箱</string>
+    <string name="about_module_cloudmusictool_en">CloudMusicTool</string>
+    <string name="about_module_quietbox">静盒</string>
+    <string name="about_module_quietbox_en">QuietBox</string>
+    <string name="about_module_quietmap">静途</string>
+    <string name="about_module_quietmap_en">QuietMap</string>
+    <string name="about_module_tiebaquiet">贴吧静净</string>
+    <string name="about_module_tiebaquiet_en">TiebaQuiet</string>
+    <string name="about_disclaimer_title">免责声明</string>
+    <string name="about_disclaimer">本模块与%1$s官方无任何关联，仅供学习、研究和个人设备使用。使用可能违反目标应用的服务条款，风险由使用者自行承担。</string>
+    <string name="about_license_title">许可证</string>
+    <string name="about_license_summary">%1$s · 查看 LICENSE</string>
+
+    <!-- 动作与提示 -->
+    <string name="action_sign_in">一键签到</string>
+    <string name="action_sign_in_summary">触发贴吧自带的全部吧签到，需已登录贴吧</string>
+    <string name="action_launch_failed">无法拉起百度贴吧，请确认已安装</string>
+    <string name="action_write_failed">写入失败：开关未保存。请确认框架已连接</string>
+    <string name="action_open_failed">无法打开链接，请检查浏览器</string>
+    <string name="action_back">返回</string>
+    <string name="action_ok">确定</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_copy">复制</string>
+    <string name="action_refresh">刷新</string>
+    <string name="action_retry">重试</string>
+</resources>

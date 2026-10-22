@@ -1,0 +1,108 @@
+import java.util.Properties
+
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+// 签名配置从仓库根 keystore.properties 读取；该文件与 .jks 都在 .gitignore 中，不入仓库。
+// 完整判定：文件存在且 storeFile 已配置。只写了一半的配置同样视为缺失，
+// 避免 release 静默回退 debug 签名或产出未签名包。
+def keystorePropsFile = rootProject.file('keystore.properties')
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+def hasKeystore = keystorePropsFile.exists() && keystoreProps.getProperty('storeFile')
+
+android {
+    namespace 'io.github.yigenhuobah.tiebaquiet'
+    // 统一基线：libxposed api/service 102.0.0 的 AAR 元数据要求 compileSdk 37。
+    compileSdk 37
+
+    defaultConfig {
+        applicationId 'io.github.yigenhuobah.tiebaquiet'
+        minSdk 29
+        targetSdk 36
+        // 本轮只迁移工程结构，版本号保持不变；0.2.0 留到 Phase 6 发布。
+        versionCode 1
+        versionName '0.1.0'
+    }
+
+    signingConfigs {
+        if (hasKeystore) {
+            release {
+                storeFile rootProject.file(keystoreProps.getProperty('storeFile'))
+                storePassword keystoreProps.getProperty('storePassword')
+                keyAlias keystoreProps.getProperty('keyAlias')
+                keyPassword keystoreProps.getProperty('keyPassword')
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (hasKeystore) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    // release 产物统一命名 tiebaquiet-<versionName>.apk。
+    applicationVariants.all { variant ->
+        if (variant.buildType.name == 'release') {
+            variant.outputs.all { output ->
+                output.outputFileName = "tiebaquiet-${variant.versionName}.apk"
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    buildFeatures {
+        // UI 已迁到 Java/XML，版本号从 PackageManager 读取，不再生成 BuildConfig。
+        buildConfig false
+    }
+
+    packaging {
+        resources {
+            excludes += 'META-INF/versions/9/OSGI-INF/MANIFEST.MF'
+        }
+    }
+}
+
+dependencies {
+    // Framework API is provided by LSPosed at runtime; must not be bundled.
+    compileOnly 'io.github.libxposed:api:102.0.0'
+    // Module app side: XposedService / RemotePreferences client; must be packaged.
+    implementation 'io.github.libxposed:service:102.0.0'
+
+    // Java/XML UI 基线依赖。
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'androidx.preference:preference:1.2.1'
+
+    testImplementation 'junit:junit:4.13.2'
+}
+
+// release 必须使用正式签名：keystore.properties 缺失 / storeFile 未配置时，
+// 只要任务图里出现 release 变体任务就在执行前硬失败，禁止回退 debug 签名或产出未签名包。
+// taskGraph.whenReady 覆盖 assemble/package/install/bundle 全部入口；debug 不受影响。
+def releaseTaskNames = ['assembleRelease', 'packageRelease', 'installRelease', 'bundleRelease']
+gradle.taskGraph.whenReady { graph ->
+    if (!hasKeystore && graph.allTasks.any { it.project == project && releaseTaskNames.contains(it.name) }) {
+        throw new GradleException('缺少有效 keystore.properties（storeFile 未配置）：release 构建必须使用正式签名')
+    }
+}

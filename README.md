@@ -75,10 +75,10 @@
 要求：JDK 17+、Android SDK Platform 37（libxposed 102 的 aar 要求 `compileSdk 37`）。
 
 ```bash
-./gradlew :module:assembleDebug
+./gradlew :app:assembleDebug
 ```
 
-产物：`module/build/outputs/apk/debug/module-debug.apk`
+产物：`app/build/outputs/apk/debug/app-debug.apk`；release 产物为 `app/build/outputs/apk/release/tiebaquiet-<versionName>.apk`（需在仓库根提供 `keystore.properties`）。
 
 安装后在 LSPosed 管理器中启用模块，作用域勾选「百度贴吧」，然后强制停止并重新打开贴吧。
 
@@ -93,7 +93,7 @@
 贴吧更新后：
 
 ```bash
-python tools/gen_anchors.py --apk <新版本apk> --out module/src/main/resources/anchors.json
+python tools/gen_anchors.py --apk <新版本apk> --out app/src/main/resources/anchors.json
 ```
 
 锚点未命中的功能会在日志中标记为 skipped，其余功能继续工作。

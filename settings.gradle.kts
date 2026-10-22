@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "TiebaQuiet"
-include(":module")
+include(":app")

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material 3 + DayNight。动态取色（Monet）在 MainActivity 里用
+         DynamicColors.applyToActivityIfAvailable 打开，API 31 以下自动回退静态色板。 -->
+    <style name="Theme.TiebaQuiet" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- PreferenceFragmentCompat 要求主题里显式声明 preferenceTheme，否则启动即抛异常。 -->
+        <item name="preferenceTheme">@style/PreferenceThemeOverlay</item>
+    </style>
+</resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    关于页互链的固定蓝色。放在资源里而不是 Java 里，便于统一调整。
+    亮/暗色背景均可读。
+-->
+<resources>
+    <color name="about_link">#1A73E8</color>
+</resources>
