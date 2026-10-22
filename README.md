@@ -8,59 +8,69 @@
 
 ## 功能
 
-设置页按用途分组（照静盒/LSPosed 管理器的结构：顶部状态卡 + 分组开关 + 页脚说明）。
+设置页按用途分组，顺序固定 **AD 广告净化 → UI 界面精简 → PV 隐私保护 → EN 功能增强**。编号用于文档、日志与诊断页；remote prefs 键保持不变。
 
-### 广告清理
-| 功能 | 默认 |
-|---|---|
-| 无开屏广告 | 开 |
-| 广告请求源头掐断（FunAd / Nad / getFeedAd） | 开 |
-| 信息流广告卡 | 开 |
-| 吧页推广卡 | 开 |
-| 直播卡过滤 | 开 |
-| 实时热点卡过滤 | 开 |
-| 悬浮广告 | 开 |
-| 营销与活动弹窗 | 开 |
-| 推荐吧卡 | 开 |
-| 彩蛋广告 | 开 |
+### AD 广告净化（默认开）
 
-### 界面精简
-| 功能 | 默认 |
-|---|---|
-| 底部 Tab 红点 | 开 |
-| 更新弹窗 | 开 |
-| 个人中心精简 | 开 |
-| 频道栏默认关注 | 关 |
-| 强制夜间模式 | 关 |
+| 编号 | 功能 | 说明 |
+|---|---|---|
+| AD-01 | 无开屏广告 | 复用官方禁开屏开关，启动不再加载广告 |
+| AD-02 | 广告请求源头掐断 | FunAd/Nad/getFeedAd 三类广告请求不再发出 |
+| AD-03 | 信息流广告卡 | 过滤首页/吧内/评论列表中的广告与推广卡片 |
+| AD-04 | 吧页推广卡 | 过滤吧页面解析出的推广/活动卡片 |
+| AD-05 | 直播卡过滤 | 信息流中不再展示“直播中/开播”卡片 |
+| AD-06 | 实时热点卡过滤 | 信息流中不再展示“实时热点”卡片 |
+| AD-07 | 悬浮广告 | 隐藏首页与帖子页的悬浮广告浮标 |
+| AD-08 | 营销与活动弹窗 | 关闭云端下发的活动、签到、营销类弹窗 |
+| AD-09 | 推荐吧卡 | 不展示“推荐吧/常逛吧”推广卡片 |
+| AD-10 | 彩蛋广告 | 关闭节日彩蛋类广告弹层 |
 
-### 功能增强
-| 功能 | 默认 |
-|---|---|
-| 只看楼主 | 开 |
-| 楼层倒序 | 开 |
-| 图片去水印 | 开 |
-| 原图入口常显 | 开 |
-| 视频直链复制 | 开 |
-| 一键签到（设置页按钮） | 关 |
+### UI 界面精简（默认开）
 
-### 隐私保护
-| 功能 | 默认 |
-|---|---|
-| 剪贴板保护 | 开 |
-| 个性化广告强制关闭 | 开 |
-| 保活服务拦截 | 关 |
+| 编号 | 功能 | 说明 |
+|---|---|---|
+| UI-01 | 底部 Tab 红点 | 隐藏底部导航的红点与角标 |
+| UI-02 | 更新弹窗 | 拦截“发现新版本”强制更新弹窗 |
+| UI-03 | 个人中心精简 | 隐藏“我的”页的会员横幅、钱包、任务赚贴贝与游戏专区 |
+
+### PV 隐私保护（默认关）
+
+| 编号 | 功能 | 说明 |
+|---|---|---|
+| PV-01 | 剪贴板保护 | 贴吧不再读取剪贴板内容（口令/图片口令失效） |
+| PV-02 | 个性化广告强制关闭 | 忽略设置项，始终按“关闭个性化广告”运行 |
+| PV-03 | 保活服务拦截 | 阻止 ALa 保活服务启动，减少后台驻留 |
+
+### EN 功能增强（默认关）
+
+| 编号 | 功能 | 说明 |
+|---|---|---|
+| EN-01 | 频道栏默认关注 | 把“关注”频道排到首页频道栏第一位 |
+| EN-02 | 强制夜间模式 | 固定使用夜间皮肤（4） |
+| EN-03 | 只看楼主 | 帖子页请求始终按只看楼主过滤 |
+| EN-04 | 楼层倒序 | 帖子楼层按倒序加载 |
+| EN-05 | 图片去水印 | 图片加载不再附加用户名/吧名水印 |
+| EN-06 | 原图入口常显 | 图片查看器始终显示“查看原图”入口 |
+| EN-07 | 视频直链复制 | 播放视频时自动复制直链到剪贴板 |
+| EN-08 | 一键签到 | 设置页按钮触发贴吧自带的全部吧签到 |
+
+默认值只影响新安装；已保存的开关不会被覆盖。旧版本写在 `features` 分组中的配置会继续读取，新版本写入 `config` 分组并同时回写旧分组一个版本。
 
 ## 设置页状态
 
-顶部状态卡有四种状态，照静盒的做法用 `getScope()` + `getRunningTargets()` 判断：
+顶部状态卡有四种状态，用 `getScope()` + `getRunningTargets()` 判断：
 
 - **正在连接框架…**：service 尚未绑定（绑定后自动刷新）
 - **未激活**：已连接框架，但作用域没勾选百度贴吧
 - **框架已连接**：作用域已勾选，但贴吧进程当前未注入（启动贴吧后生效）
 - **已激活**：贴吧进程已注入，显示框架 API 版本
 
-安装的贴吧版本不是 22.12.1.0 时会显示红色警告横幅。框架未绑定时开关置灰，避免“改了没用”。
+异常横幅只在两种情况下出现：贴吧版本不是 22.12.1.0，或已启用且明确失败的功能数 ≥ 2。框架未绑定时开关置灰，避免“改了没用”。
 
+## 诊断与关于
+
+- **诊断页**：逐功能显示 `编号 标题` 与 `registered · hit N · skip 原因`；无数据显示 `—`。页首显示刷新时间，页尾可刷新或复制全部诊断信息。诊断数据只来自目标进程回传，不包含用户内容。
+- **关于页**：模块版本、目标应用与适配版本、源码地址、四模块互链、免责声明与 MIT 许可证。
 
 ## 安装
 
@@ -72,22 +82,31 @@
 
 ## 构建
 
-要求：JDK 17+、Android SDK Platform 37（libxposed 102 的 aar 要求 `compileSdk 37`）。
+要求：JDK 17、Android SDK Platform 37（libxposed 102 的 aar 要求 `compileSdk 37`）。
 
 ```bash
 ./gradlew :app:assembleDebug
 ```
 
-产物：`app/build/outputs/apk/debug/app-debug.apk`；release 产物为 `app/build/outputs/apk/release/tiebaquiet-<versionName>.apk`（需在仓库根提供 `keystore.properties`）。
+产物：`app/build/outputs/apk/debug/app-debug.apk`；release 产物为 `app/build/outputs/apk/release/tiebaquiet-<versionName>.apk`（需在仓库根提供 `keystore.properties` 与签名文件，缺失时 release 构建直接失败）。
 
-安装后在 LSPosed 管理器中启用模块，作用域勾选「百度贴吧」，然后强制停止并重新打开贴吧。
+完整验证：
+
+```bash
+./gradlew clean test assembleDebug assembleRelease
+```
 
 ## 架构
 
-- `TiebaQuietModule`：libxposed 入口，仅注入贴吧主进程。
+全部为 Java 17 + XML + Material 3，不使用 Kotlin/Compose。
+
+- `TiebaQuietModule`：libxposed 入口，仅注入贴吧主进程；安装完成后启动诊断回传。
+- `Feature` / `FeatureRegistry`：24 个功能的编号、remote key、文案、默认值、分组与安装器。
 - `anchor/AnchorTable`：读取打包进 APK 的 `anchors.json`，运行时反射校验类/方法是否存在；缺失时只禁用对应功能。
-- `feature/Feature`：每个功能一个对象，声明默认开关与 `install()`。
-- `settings/SettingsRepository`：模块 App 通过 LSPosed 服务读写 RemotePreferences（组名 `features`）。
+- `feature/phase1|2|3`：各功能的 hook 安装器；`CardFilter` / `FeedCardSweeper` 为信息流过滤公共逻辑。
+- `Config` / `ConfigStore` / `ConfigMigration`：目标进程读、模块 App 写，新分组 `config` 优先、旧分组 `features` 兜底。
+- `ServiceBridge`：XposedService 绑定、占位 binder 过滤与 remote prefs 获取。
+- `HookState` / `hooks/Report` / `StatusProvider`：目标进程每 3 秒回传注册/命中/跳过状态，模块 App 侧校验 UID 后落盘供诊断页读取。
 - `tools/gen_anchors.py`：构建期用 [DexSQL](https://github.com/LSPosed/dexsql-release) 校验全部锚点并生成 `anchors.json`。
 
 贴吧更新后：

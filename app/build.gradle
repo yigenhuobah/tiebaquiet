@@ -2,7 +2,6 @@ import java.util.Properties
 
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
 }
 
 // 签名配置从仓库根 keystore.properties 读取；该文件与 .jks 都在 .gitignore 中，不入仓库。
@@ -24,9 +23,8 @@ android {
         applicationId 'io.github.yigenhuobah.tiebaquiet'
         minSdk 29
         targetSdk 36
-        // 本轮只迁移工程结构，版本号保持不变；0.2.0 留到 Phase 6 发布。
-        versionCode 1
-        versionName '0.1.0'
+        versionCode 2
+        versionName '0.2.0'
     }
 
     signingConfigs {
@@ -67,12 +65,9 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = '17'
-    }
 
     buildFeatures {
-        // UI 已迁到 Java/XML，版本号从 PackageManager 读取，不再生成 BuildConfig。
+        // 版本号从 PackageManager 读取，不再生成 BuildConfig。
         buildConfig false
     }
 
@@ -95,6 +90,8 @@ dependencies {
     implementation 'androidx.preference:preference:1.2.1'
 
     testImplementation 'junit:junit:4.13.2'
+    // Feature 类的方法签名引用 libxposed API；纯 JVM 单测需要它在测试运行时可见。
+    testImplementation 'io.github.libxposed:api:102.0.0'
 }
 
 // release 必须使用正式签名：keystore.properties 缺失 / storeFile 未配置时，

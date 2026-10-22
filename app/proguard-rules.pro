@@ -23,6 +23,10 @@
 -keep class io.github.yigenhuobah.tiebaquiet.SettingsFragment { *; }
 -keep class io.github.yigenhuobah.tiebaquiet.DiagnosticsFragment { *; }
 -keep class io.github.yigenhuobah.tiebaquiet.AboutFragment { *; }
+-keep class io.github.yigenhuobah.tiebaquiet.TiebaQuietApp { *; }
+
+# 诊断回传 Provider 由 manifest 声明、由目标进程跨应用调用。
+-keep class io.github.yigenhuobah.tiebaquiet.StatusProvider { *; }
 
 # 自定义 Preference 由 res/xml/prefs.xml 按类名反射实例化。
 -keep class io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference {

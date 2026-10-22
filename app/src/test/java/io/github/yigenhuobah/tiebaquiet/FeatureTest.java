@@ -2,6 +2,7 @@ package io.github.yigenhuobah.tiebaquiet;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
@@ -16,18 +17,18 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * UiFeature 编号、key、分组与默认值。
+ * Feature 编号、key、分组与默认值。
  *
  * key 是 remote prefs 两读一写共用的键，改了会连带断掉已保存的开关状态，必须锁死；
- * code 是统一功能编号，顺序与 FEATURE_ID_MAP.md 2.4 节 Tieba 表一致。
+ * code 是统一功能编号，顺序与 FEATURE_ID_MAP.md 2.4 节 Tieba 表及设置页一致。
  * 默认值遵循统一策略：AD/UI 默认开，EN/PV/EX 默认关。
  */
-public class UiFeatureTest {
+public class FeatureTest {
 
     /** 统一编号格式：AD/UI/PV/EN/EX + 两位序号。 */
     private static final Pattern CODE_PATTERN = Pattern.compile("^(AD|UI|PV|EN|EX)-\\d{2}$");
 
-    /** FEATURE_ID_MAP.md 2.4 节 Tieba 表：key → code，顺序即枚举顺序。 */
+    /** FEATURE_ID_MAP.md 2.4 节 Tieba 表：key → code，顺序即注册表顺序。 */
     private static final Map<String, String> EXPECTED = buildExpected();
 
     private static Map<String, String> buildExpected() {
@@ -45,6 +46,9 @@ public class UiFeatureTest {
         map.put("tab_red_dot", "UI-01");
         map.put("update_dialog", "UI-02");
         map.put("profile_cleanup", "UI-03");
+        map.put("clipboard_guard", "PV-01");
+        map.put("personalized_ad_off", "PV-02");
+        map.put("keep_alive_block", "PV-03");
         map.put("default_channel", "EN-01");
         map.put("force_night", "EN-02");
         map.put("host_only", "EN-03");
@@ -53,31 +57,28 @@ public class UiFeatureTest {
         map.put("original_image", "EN-06");
         map.put("video_link", "EN-07");
         map.put("one_key_sign", "EN-08");
-        map.put("clipboard_guard", "PV-01");
-        map.put("personalized_ad_off", "PV-02");
-        map.put("keep_alive_block", "PV-03");
         return map;
     }
 
     @Test
     public void twentyFourFeaturesPresent() {
-        assertEquals("UiFeature 数量必须是 24", 24, UiFeature.values().length);
+        assertEquals("Feature 数量必须是 24", 24, FeatureRegistry.all().size());
     }
 
     @Test
     public void keysMatchSpec() {
         Set<String> actual = new HashSet<>();
-        for (UiFeature f : UiFeature.values()) {
+        for (Feature f : FeatureRegistry.all()) {
             actual.add(f.key);
         }
         assertEquals(new HashSet<>(EXPECTED.keySet()), actual);
     }
 
     @Test
-    public void codesMatchSpecAndEnumOrder() {
-        assertEquals("枚举顺序必须与 FEATURE_ID_MAP 的 Tieba 表一致",
-                new ArrayList<>(EXPECTED.keySet()), keysInEnumOrder());
-        for (UiFeature f : UiFeature.values()) {
+    public void codesMatchSpecAndRegistryOrder() {
+        assertEquals("注册表顺序必须与 FEATURE_ID_MAP 的 Tieba 表一致",
+                new ArrayList<>(EXPECTED.keySet()), keysInRegistryOrder());
+        for (Feature f : FeatureRegistry.all()) {
             assertEquals("编号与 FEATURE_ID_MAP 不一致: " + f.key,
                     EXPECTED.get(f.key), f.code);
         }
@@ -86,7 +87,7 @@ public class UiFeatureTest {
     @Test
     public void codesAreUnique() {
         Set<String> seen = new HashSet<>();
-        for (UiFeature f : UiFeature.values()) {
+        for (Feature f : FeatureRegistry.all()) {
             assertTrue("code 重复: " + f.code, seen.add(f.code));
         }
         assertEquals(EXPECTED.size(), seen.size());
@@ -95,7 +96,7 @@ public class UiFeatureTest {
     @Test
     public void keysAreUnique() {
         Set<String> seen = new HashSet<>();
-        for (UiFeature f : UiFeature.values()) {
+        for (Feature f : FeatureRegistry.all()) {
             assertTrue("key 重复: " + f.key, seen.add(f.key));
         }
         assertEquals(EXPECTED.size(), seen.size());
@@ -103,38 +104,46 @@ public class UiFeatureTest {
 
     @Test
     public void codesUseUnifiedFormat() {
-        for (UiFeature f : UiFeature.values()) {
+        for (Feature f : FeatureRegistry.all()) {
             assertTrue("code 格式不合法: " + f.code, CODE_PATTERN.matcher(f.code).matches());
         }
     }
 
     @Test
     public void groupCountsMatchSpec() {
-        Map<UiFeature.Group, Integer> counts = new EnumMap<>(UiFeature.Group.class);
-        for (UiFeature f : UiFeature.values()) {
+        Map<Feature.Group, Integer> counts = new EnumMap<>(Feature.Group.class);
+        for (Feature f : FeatureRegistry.all()) {
             Integer old = counts.get(f.group);
             counts.put(f.group, old == null ? 1 : old + 1);
         }
-        assertEquals("AD 分组必须是 10 项", Integer.valueOf(10), counts.get(UiFeature.Group.AD));
-        assertEquals("UI 分组必须是 3 项", Integer.valueOf(3), counts.get(UiFeature.Group.UI));
-        assertEquals("EN 分组必须是 8 项", Integer.valueOf(8), counts.get(UiFeature.Group.EN));
-        assertEquals("PV 分组必须是 3 项", Integer.valueOf(3), counts.get(UiFeature.Group.PV));
-        assertFalse("TiebaQuiet 没有 EX 分组", counts.containsKey(UiFeature.Group.EX));
+        assertEquals("AD 分组必须是 10 项", Integer.valueOf(10), counts.get(Feature.Group.AD));
+        assertEquals("UI 分组必须是 3 项", Integer.valueOf(3), counts.get(Feature.Group.UI));
+        assertEquals("PV 分组必须是 3 项", Integer.valueOf(3), counts.get(Feature.Group.PV));
+        assertEquals("EN 分组必须是 8 项", Integer.valueOf(8), counts.get(Feature.Group.EN));
+        assertFalse("TiebaQuiet 没有 EX 分组", counts.containsKey(Feature.Group.EX));
+    }
+
+    @Test
+    public void groupsUseFixedOrder() {
+        assertEquals("分组顺序必须是 AD → UI → PV → EN",
+                java.util.Arrays.asList(Feature.Group.AD, Feature.Group.UI,
+                        Feature.Group.PV, Feature.Group.EN),
+                FeatureRegistry.groups());
     }
 
     @Test
     public void adAndUiDefaultEnabled() {
-        for (UiFeature f : UiFeature.values()) {
-            if (f.group == UiFeature.Group.AD || f.group == UiFeature.Group.UI) {
+        for (Feature f : FeatureRegistry.all()) {
+            if (f.group == Feature.Group.AD || f.group == Feature.Group.UI) {
                 assertTrue(f.code + " " + f.key + " 应默认开启", f.defaultEnabled);
             }
         }
     }
 
     @Test
-    public void enAndPvDefaultDisabled() {
-        for (UiFeature f : UiFeature.values()) {
-            if (f.group == UiFeature.Group.EN || f.group == UiFeature.Group.PV) {
+    public void pvAndEnDefaultDisabled() {
+        for (Feature f : FeatureRegistry.all()) {
+            if (f.group == Feature.Group.PV || f.group == Feature.Group.EN) {
                 assertFalse(f.code + " " + f.key + " 应默认关闭", f.defaultEnabled);
             }
         }
@@ -142,16 +151,29 @@ public class UiFeatureTest {
 
     @Test
     public void defaultEnabledMatchesGroupPolicy() {
-        for (UiFeature f : UiFeature.values()) {
-            boolean expected = f.group == UiFeature.Group.AD || f.group == UiFeature.Group.UI;
+        for (Feature f : FeatureRegistry.all()) {
+            boolean expected = f.group == Feature.Group.AD || f.group == Feature.Group.UI;
             assertEquals(f.code + " " + f.key + " 默认值与分组策略不符",
                     expected, f.defaultEnabled);
         }
     }
 
-    private static List<String> keysInEnumOrder() {
+    @Test
+    public void noBlockedFeatures() {
+        for (Feature f : FeatureRegistry.all()) {
+            assertFalse(f.code + " 不应标记 blocked", f.blocked());
+        }
+    }
+
+    @Test
+    public void byKeyReturnsRegisteredFeature() {
+        assertEquals("splash_no_ad", FeatureRegistry.byKey("splash_no_ad").key);
+        assertNull("未知 key 必须返回 null", FeatureRegistry.byKey("not_a_feature"));
+    }
+
+    private static List<String> keysInRegistryOrder() {
         List<String> keys = new ArrayList<>();
-        for (UiFeature f : UiFeature.values()) {
+        for (Feature f : FeatureRegistry.all()) {
             keys.add(f.key);
         }
         return keys;

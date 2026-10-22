@@ -14,8 +14,6 @@ import androidx.fragment.app.FragmentManager;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.color.DynamicColors;
 
-import io.github.yigenhuobah.tiebaquiet.settings.SettingsRepository;
-
 /**
  * 单 Activity 外壳：工具栏 + Fragment 容器。
  *
@@ -59,11 +57,11 @@ public class MainActivity extends AppCompatActivity {
 
         applyInsets();
 
-        // 顺序不能反：先挂监听再 init，init 对已缓存的 binder 会立即回调，
+        // 顺序不能反：先挂回调再 bind，已缓存的 binder 会立即回调，
         // 回调必须先挂上，否则首次绑定会被空回调吃掉、永远等不到重绘。
-        SettingsRepository.addListener(mRefreshListener);
-        SettingsRepository.init(getApplicationContext());
-        SettingsRepository.refresh();
+        ServiceBridge.setOnBound(mRefreshListener);
+        ServiceBridge.bind(getApplicationContext());
+        refreshCurrent();
     }
 
     /** 二级页显示返回箭头；主页面隐藏，避免出现“返回即退出”的误导。 */
@@ -101,7 +99,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
-        SettingsRepository.removeListener(mRefreshListener);
+        ServiceBridge.setOnBound(null);
         getSupportFragmentManager().removeOnBackStackChangedListener(mBackStackListener);
         super.onDestroy();
     }

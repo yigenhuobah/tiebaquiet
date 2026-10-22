@@ -18,22 +18,27 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import io.github.libxposed.service.XposedService;
 import io.github.yigenhuobah.tiebaquiet.feature.phase2.SignInFeature;
-import io.github.yigenhuobah.tiebaquiet.settings.SettingsRepository;
 
 /**
- * 主设置页：状态卡 + 四态判断 + 版本横幅 + 一键签到 + AD/UI/PV/EN 分组 + 二级页入口 + 页脚。
+ * 主设置页：状态卡 + 四态判断 + 异常横幅 + 一键签到 + AD/UI/PV/EN 分组 +
+ * 二级页入口 + 页脚。
  *
  * <p>主页面零诊断：这里不展示逐功能 registered/hit/skip，只保留状态卡和聚合横幅；
- * 细节统一放到 {@link DiagnosticsFragment}。诊断数据通道在 Phase 6 接入。
+ * 细节统一放到 {@link DiagnosticsFragment}。
  */
 public class SettingsFragment extends PreferenceFragmentCompat {
 
     private static final String TAG = "TiebaQuiet";
-    private static final String TARGET = SettingsRepository.TARGET_PACKAGE;
+    private static final String TARGET = ConfigStore.TARGET_PACKAGE;
+    private static final String TARGET_VERSION = ConfigStore.TARGET_VERSION;
 
     /** 一键签到：拉起贴吧后等待主界面就绪，再发显式广播。 */
     private static final long SIGN_BROADCAST_DELAY_MS = 1200L;
+
+    /** 失败功能数达到该阈值才显示异常横幅。 */
+    private static final int FAILED_BANNER_THRESHOLD = 2;
 
     /**
      * 状态卡的框架查询是同步 binder，放后台单线程执行，避免框架卡顿时拖住设置页首帧。
@@ -45,6 +50,10 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 return t;
             });
 
+    private ConfigStore mStore;
+    /** mStore 对应的 service 实例；同一实例内 remote prefs 不变，可复用。 */
+    private XposedService mStoreService;
+
     /** 后台状态查询句柄：新查询提交前取消旧的，onDestroyView 取消全部。 */
     private Future<?> mStatusFuture;
     /** 查询代次：旧查询即使无法中断，也不能覆盖新查询的结果。 */
@@ -55,6 +64,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
         setPreferencesFromResource(R.xml.prefs, rootKey);
+        mStoreService = ServiceBridge.get();
+        mStore = new ConfigStore(requireContext());
         bindFeatures();
         bindPages();
         refresh();
@@ -77,9 +88,9 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         super.onDestroyView();
     }
 
-    /** 把 UiFeature 的标题/说明/开关接到 XML 声明的偏好项上。 */
+    /** 把 Feature 的标题/说明/开关接到 XML 声明的偏好项上。 */
     private void bindFeatures() {
-        for (UiFeature f : UiFeature.values()) {
+        for (Feature f : FeatureRegistry.all()) {
             Preference p = findPreference(f.key);
             if (p == null) {
                 Log.e(TAG, "preference missing for " + f.key);
@@ -87,9 +98,17 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             }
             p.setTitle(f.titleRes);
             p.setSummary(f.summaryRes);
+
+            if (f.blocked()) {
+                // blocked 功能保留编号和行位，但不注册 hook、不允许切换。
+                p.setEnabled(false);
+                p.setSummary(getString(R.string.f_blocked_summary, f.blockedReason));
+                continue;
+            }
+
             p.setOnPreferenceChangeListener((pref, value) -> {
                 if (value instanceof Boolean) {
-                    boolean ok = SettingsRepository.setBoolean(f.key, (Boolean) value);
+                    boolean ok = mStore.put(f.key, (Boolean) value);
                     if (!ok) {
                         Toast.makeText(requireContext(), R.string.action_write_failed,
                                 Toast.LENGTH_SHORT).show();
@@ -130,8 +149,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         if (footer != null) {
             String target = getString(R.string.app_target_name);
             footer.setSummary(getString(R.string.footer_restart, target)
-                    + "\n" + getString(R.string.footer_compat, target,
-                    SettingsRepository.TARGET_VERSION));
+                    + "\n" + getString(R.string.footer_compat, target, TARGET_VERSION));
         }
     }
 
@@ -143,7 +161,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         if (getContext() == null) {
             return;
         }
-        if (!SettingsRepository.setBoolean(UiFeature.ONE_KEY_SIGN.key, true)) {
+        if (!mStore.put(SignInFeature.KEY, true)) {
             Toast.makeText(requireContext(), R.string.action_write_failed,
                     Toast.LENGTH_SHORT).show();
             return;
@@ -171,15 +189,21 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         if (getContext() == null) {
             return;
         }
-        boolean writable = SettingsRepository.writable();
+        XposedService service = ServiceBridge.get();
+        // 同一 service 实例内 remote prefs 不会变，复用 mStore 可省掉每次 refresh 的 binder。
+        if (mStore == null || service != mStoreService) {
+            mStore = new ConfigStore(requireContext());
+            mStoreService = service;
+        }
+        boolean writable = mStore.remote();
 
-        for (UiFeature f : UiFeature.values()) {
+        for (Feature f : FeatureRegistry.all()) {
             Preference p = findPreference(f.key);
             if (p instanceof MaterialSwitchPreference) {
                 MaterialSwitchPreference sw = (MaterialSwitchPreference) p;
-                sw.setCheckedValue(SettingsRepository.getBoolean(f.key, f.defaultEnabled));
-                // 框架没绑定时写不进去，置灰避免“改了没用”。
-                sw.setEnabled(writable);
+                sw.setCheckedValue(mStore.get(f.key, f.defaultEnabled));
+                // 框架没绑定时写不进去，置灰避免“改了没用”；blocked 始终置灰。
+                sw.setEnabled(writable && !f.blocked());
             }
         }
 
@@ -197,7 +221,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
      * Fragment 已 detach 或 Activity 已更换时整份结果丢弃。
      */
     private void loadStatusAsync() {
-        final boolean writable = SettingsRepository.writable();
+        final boolean writable = mStore.remote();
         final String targetVersion = shownTargetVersion();
         final String moduleVersion = versionName();
         final Activity host = requireActivity();
@@ -207,7 +231,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             mStatusFuture.cancel(false);
         }
         mStatusFuture = STATUS_EXECUTOR.submit(() -> {
-            SettingsRepository.Status status = SettingsRepository.status();
+            ServiceBridge.Status status = ServiceBridge.status(TARGET);
             if (!isAdded() || getActivity() != host) {
                 return;
             }
@@ -220,14 +244,14 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                     return;
                 }
                 String targetApp = getString(R.string.app_target_name);
-                if (!status.getConnected()) {
+                if (!status.isConnected()) {
                     p.setTitle(R.string.status_connecting);
                     p.setSummary(getString(R.string.status_detail_connecting, targetVersion));
-                } else if (!status.getScoped()) {
+                } else if (!status.isScoped()) {
                     p.setTitle(R.string.status_inactive);
                     p.setSummary(getString(R.string.status_detail_no_scope,
                             status.getApiVersion(), targetApp, targetVersion, moduleVersion));
-                } else if (status.getInjected()) {
+                } else if (status.isInjected()) {
                     p.setTitle(R.string.status_active);
                     p.setSummary(getString(R.string.status_detail_active,
                             status.getApiVersion(), targetApp, targetVersion, moduleVersion));
@@ -241,23 +265,28 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         });
     }
 
-    /** 版本不匹配时显示红色横幅；不新增第五种状态。诊断失败计数留到 Phase 6。 */
+    /**
+     * 异常横幅：版本不匹配，或“已启用且明确失败”的功能数 ≥ 2。
+     * 不新增第五种状态卡状态。
+     */
     private void updateBanner() {
         Preference banner = findPreference("warning");
         if (banner == null || getContext() == null) {
             return;
         }
         String target = targetVersion();
-        if (target == null) {
-            // 目标应用未安装或 PackageManager 读不到版本：不显示横幅，避免误导。
-            banner.setVisible(false);
+        if (target != null && !TARGET_VERSION.equals(target)) {
+            banner.setSummary(getString(R.string.status_banner_version, target,
+                    TARGET_VERSION));
+            banner.setVisible(true);
             return;
         }
-        if (!SettingsRepository.TARGET_VERSION.equals(target)) {
-            banner.setSummary(getString(R.string.status_banner_version, target,
-                    SettingsRepository.TARGET_VERSION));
+        int failed = StatusProvider.failedFeatureCount(requireContext());
+        if (failed >= FAILED_BANNER_THRESHOLD) {
+            banner.setSummary(getString(R.string.status_banner_failed, failed));
             banner.setVisible(true);
         } else {
+            // 目标应用未安装或失败数不足：不显示横幅，避免误导。
             banner.setVisible(false);
         }
     }

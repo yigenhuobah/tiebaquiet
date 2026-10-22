@@ -13,7 +13,7 @@ import com.google.android.material.materialswitch.MaterialSwitch;
  *
  * 不使用 androidx.preference.SwitchPreferenceCompat：默认外观是旧版 SwitchCompat，
  * 与 Material 3 主题不搭。这里自己绑 MaterialSwitch，并关闭本地持久化 ——
- * 开关值统一由 {@link io.github.yigenhuobah.tiebaquiet.settings.SettingsRepository}
+ * 开关值统一由 {@link io.github.yigenhuobah.tiebaquiet.ConfigStore}
  * 写进框架的 remote preferences，否则贴吧进程读不到。
  */
 public class MaterialSwitchPreference extends Preference {
@@ -27,7 +27,7 @@ public class MaterialSwitchPreference extends Preference {
     public MaterialSwitchPreference(Context context, AttributeSet attrs) {
         super(context, attrs);
         setLayoutResource(R.layout.preference_material_switch);
-        // 值由 SettingsRepository 统一写入 remote prefs，Preference 自己不再存一份。
+        // 值由 ConfigStore 统一写入 remote prefs，Preference 自己不再存一份。
         setPersistent(false);
     }
 

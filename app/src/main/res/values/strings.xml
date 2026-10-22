@@ -40,8 +40,8 @@
 
     <!-- 诊断页 -->
     <string name="diag_title">诊断</string>
-    <string name="diag_placeholder">当前版本尚未接入诊断回传，暂不展示逐功能状态</string>
-    <string name="diag_hint">数据来自目标进程回传。registered=挂载成功，hit=命中次数，skip=跳过原因</string>
+    <string name="diag_header">数据来自目标进程回传 · 刷新时间 %1$s</string>
+    <string name="diag_hint">registered=挂载成功 · hit=命中次数 · skip=跳过原因</string>
     <string name="diag_empty_title">暂无诊断数据</string>
     <string name="diag_empty">启动%1$s后重新进入本页</string>
     <string name="diag_refresh">刷新</string>

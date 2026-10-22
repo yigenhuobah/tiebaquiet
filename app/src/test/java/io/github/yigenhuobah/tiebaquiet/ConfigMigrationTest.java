@@ -1,4 +1,4 @@
-package io.github.yigenhuobah.tiebaquiet.settings;
+package io.github.yigenhuobah.tiebaquiet;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -64,8 +64,28 @@ public class ConfigMigrationTest {
 
     @Test
     public void unknownKeyIgnored() {
-        assertEquals("无关 key 不应影响目标 key",
-                true, ConfigMigration.resolve(KEY, values("other", false),
+        assertTrue("无关 key 不应影响目标 key",
+                ConfigMigration.resolve(KEY, values("other", false),
                         values("other", false), true));
+    }
+
+    @Test
+    public void nullMapsFallBackToDefault() {
+        assertTrue("null Map 与缺失 key 等价",
+                ConfigMigration.resolve(KEY, null, null, true));
+    }
+
+    @Test
+    public void nullValuesUseLegacyThenDefault() {
+        assertTrue("新值为 null 时旧值优先",
+                ConfigMigration.resolve(null, Boolean.TRUE, false));
+        assertFalse("两个值都为 null 时使用默认值",
+                ConfigMigration.resolve(null, null, false));
+    }
+
+    @Test
+    public void groupNamesAreStable() {
+        assertEquals("config", ConfigMigration.GROUP);
+        assertEquals("features", ConfigMigration.LEGACY_GROUP);
     }
 }

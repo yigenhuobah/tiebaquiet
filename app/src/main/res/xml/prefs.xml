@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     主设置页：状态卡 -> 异常横幅 -> 一键签到 -> AD/UI/PV/EN 分组 -> 诊断/关于入口 -> 页脚。
-    每个功能行的 android:key 必须与 UiFeature.key 完全一致；
-    标题/摘要由 SettingsFragment 从 UiFeature 注入，这里只声明 key 与分组图标。
+    每个功能行的 android:key 必须与 FeatureRegistry 中 Feature.key 完全一致；
+    标题/摘要由 SettingsFragment 从 FeatureRegistry 注入，这里只声明 key 与分组图标。
 -->
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
 

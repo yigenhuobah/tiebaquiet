@@ -21,8 +21,6 @@ import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceScreen;
 import androidx.preference.PreferenceViewHolder;
 
-import io.github.yigenhuobah.tiebaquiet.settings.SettingsRepository;
-
 /**
  * 关于页：模块/版本、目标应用、源码、四模块互链、免责声明、许可证。
  *
@@ -70,7 +68,7 @@ public class AboutFragment extends PreferenceFragmentCompat {
 
         screen.addPreference(info(R.string.about_target,
                 getString(R.string.about_target_value, getString(R.string.app_target_name),
-                        SettingsRepository.TARGET_PACKAGE, SettingsRepository.TARGET_VERSION)));
+                        ConfigStore.TARGET_PACKAGE, ConfigStore.TARGET_VERSION)));
 
         Preference source = info(R.string.about_source,
                 getString(R.string.about_source_summary, SOURCE_URL));

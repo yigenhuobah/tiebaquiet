@@ -23,5 +23,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 目标进程诊断回传通道；authority 与 Report/StatusProvider 常量一致。 -->
+        <provider
+            android:name=".StatusProvider"
+            android:authorities="${applicationId}.status"
+            android:exported="true" />
     </application>
 </manifest>
