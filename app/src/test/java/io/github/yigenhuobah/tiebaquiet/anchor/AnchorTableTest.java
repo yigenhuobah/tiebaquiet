@@ -2,6 +2,8 @@ package io.github.yigenhuobah.tiebaquiet.anchor;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import org.junit.Test;
@@ -14,6 +16,14 @@ public class AnchorTableTest {
 
     private static ClassLoader loader() {
         return AnchorTable.class.getClassLoader();
+    }
+
+    @Test
+    public void supportedVersionMatchesExactAndAllowsUnknown() {
+        assertTrue(AnchorTable.isSupportedVersion("22.12.1.0", "22.12.1.0"));
+        assertFalse(AnchorTable.isSupportedVersion("22.12.1.0", "22.11.0.0"));
+        assertTrue("未知版本按 fail-open 处理",
+                AnchorTable.isSupportedVersion("22.12.1.0", null));
     }
 
     @Test

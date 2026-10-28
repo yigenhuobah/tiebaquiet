@@ -9,8 +9,8 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 锚点表：构建期由 tools/gen_anchors.py 用 DexSQL 校验生成。
@@ -24,8 +24,8 @@ public final class AnchorTable {
     private final long versionCode;
     private final JSONObject root;
     private final ClassLoader loader;
-    private final HashMap<String, Method> methodCache = new HashMap<>();
-    private final HashMap<String, Class<?>> classCache = new HashMap<>();
+    private final ConcurrentHashMap<String, Method> methodCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Class<?>> classCache = new ConcurrentHashMap<>();
 
     private AnchorTable(String appVersion, long versionCode, JSONObject root,
                         ClassLoader loader) {
@@ -98,7 +98,12 @@ public final class AnchorTable {
     }
 
     public boolean isSupportedVersion(String installedVersion) {
-        return installedVersion == null || installedVersion.equals(appVersion);
+        return isSupportedVersion(appVersion, installedVersion);
+    }
+
+    /** 版本门禁规则：未知版本 fail-open；已知版本必须精确匹配。 */
+    static boolean isSupportedVersion(String expectedVersion, String installedVersion) {
+        return installedVersion == null || installedVersion.equals(expectedVersion);
     }
 
     private Class<?> loadClass(String name) {
