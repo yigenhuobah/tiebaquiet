@@ -3,18 +3,32 @@
 生成 anchors.json：用 DexSQL 校验每个 hook 锚点在目标 APK 中存在，只输出命中项。
 
 用法:
-    python tools/gen_anchors.py --apk "E:/download/base(3).apk" \
+    python tools/gen_anchors.py --apk /path/to/tieba.apk \
         --out app/src/main/resources/anchors.json
+
+    # 找不到 dexsql 时显式指定
+    python tools/gen_anchors.py --apk ... --out ... --dexsql /path/to/dexsql
+
+dexsql 解析顺序: --dexsql > DEXSQL 环境变量 > PATH > 仓库 tools/dexsql/ > 常见安装路径。
+appVersion/versionCode 默认从 --apk 读取（aapt2/aapt/apkanalyzer）。工具不可用或读取
+失败时，必须显式传 --app-version / --version-code，否则报错退出。
+
+所有锚点都命中后才写 --out；缺失时只打印 MISSING 并以非 0 退出，原文件保持不变。
 """
 import argparse
 import json
+import os
+import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
-DEXSQL = r"E:\tools\dexsql\dexsql.exe"
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
 
-# key: (class java name, method name, JVM descriptor of parameters+return, kind)
+# key: (class java name, method name, JVM descriptor of parameters+return)
 ANCHORS = {
     # ---------- phase 1 ----------
     "splash_forbid_b": ("com.baidu.tieba.ad.under.utils.SplashForbidAdHelperKt", "b", "()Z"),
@@ -56,11 +70,14 @@ ANCHORS = {
     "live_item_45_set_data": ("com.baidu.live.business.Live4Ratio5ItemView", "setData", "(Lcom/baidu/live/business/model/data/LiveRoomEntity;I)V"),
     "thread_ad_url": ("com.baidu.tbadk.core.data.ThreadData", "getAd_url", "()Ljava/lang/String;"),
     "thread_ad_subscript": ("com.baidu.tbadk.core.data.ThreadData", "getShowAdSubscript", "()Z"),
-    "thread_is_bjh": ("com.baidu.tbadk.core.data.ThreadData", "isBjh", "()Z"),
-    "thread_is_smartapp": ("com.baidu.tbadk.core.data.ThreadData", "isSmartAppThreadType", "()Z"),
     "thread_is_live": ("com.baidu.tbadk.core.data.ThreadData", "isAlaLiveMixThreadType", "()Z"),
     "thread_is_act": ("com.baidu.tbadk.core.data.ThreadData", "isActInfo", "()Z"),
-    "thread_is_ugc": ("com.baidu.tbadk.core.data.ThreadData", "isUgcThreadType", "()Z"),
+
+    # 以下 8 个历史锚点已确认在 app/src/main/java 中没有任何
+    # anchors.method()/clazz() 引用（删除前全仓库检索只命中 anchors.json 与本文件），
+    # 属于死锚点，已从生成清单和 anchors.json 移除：
+    #   big_image_loader / save_image / sign_single_y0 / tbwebview_load_url /
+    #   thread_is_bjh / thread_is_smartapp / thread_is_ugc / webview_page_finished
 
     # ---------- phase 2 ----------
     "pid_loader_load": ("com.fun.ad.sdk.internal.api.BasePidLoader", "load", "(Landroid/content/Context;Lcom/fun/ad/sdk/FunAdSlot;Lcom/fun/ad/sdk/internal/api/SidSessionMeta;)Z"),
@@ -68,16 +85,14 @@ ANCHORS = {
     "qy8_c": ("com.baidu.tieba.qy8", "c", "(Lcom/baidu/tieba/c18;Lcom/baidu/tieba/i18;)V"),
     "add_lz": ("com.baidu.tieba.pb.pagebrowser.net.PageBrowserRequestMessage", "addLz", "(Ltbclient/PbList/DataReq$Builder;)V"),
     "add_r": ("com.baidu.tieba.pb.pagebrowser.net.PageBrowserRequestMessage", "addR", "(Ltbclient/PbList/DataReq$Builder;)V"),
-    "big_image_loader": ("com.baidu.tbadk.core.util.resourceLoaderProc.BigImageLoaderProc", "getFromRemote", "(Ljava/lang/String;Ljava/lang/String;IILcom/baidu/tieba/q8;[Ljava/lang/Object;)Ljava/lang/Object;"),
-    "save_image": ("com.baidu.tbadk.core.util.FileHelper", "saveImageFileByUser", "(Ljava/lang/String;[BLandroid/content/Context;)I"),
     "watermark_type": ("com.baidu.tieba.j76", "b", "()I"),
     "original_button": ("com.baidu.tbadk.coreExtra.view.UrlDragImageView", "W", "()Z"),
     "video_set_path": ("com.baidu.tieba.play.TbVideoView", "setVideoPath", "(Ljava/lang/String;Ljava/lang/String;)V"),
     "sign_all_load": ("com.baidu.tieba.signall.SignAllForumModel", "loadData", "()Z"),
-    "sign_single_y0": ("com.baidu.tieba.signall.SignSingleModel", "Y0", "(Ljava/lang/String;Ljava/lang/String;)V"),
 
     # ---------- phase 3 ----------
-    "clipboard": ("com.baidu.tbadk.core.util.UtilHelper", "getClipBoardContent", "()Ljava/lang/String;"),    "personalized_ad": ("com.baidu.tbadk.TbSingleton", "getPersonalizedAdSwitch", "()I"),
+    "clipboard": ("com.baidu.tbadk.core.util.UtilHelper", "getClipBoardContent", "()Ljava/lang/String;"),
+    "personalized_ad": ("com.baidu.tbadk.TbSingleton", "getPersonalizedAdSwitch", "()I"),
     "keep_alive": ("com.baidu.tieba.ala.ALaKeepAliveService", "startService", "(Landroid/content/Context;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V"),
 
     # ---------- ad insertion gates ----------
@@ -85,8 +100,6 @@ ANCHORS = {
     "ad_card_gate": ("com.baidu.tieba.bie", "h", "(Lcom/baidu/tbadk/core/data/AdvertAppInfo;)Z"),
 
     # ---------- H5 page hooks ----------
-    "webview_page_finished": ("com.baidu.webkit.sdk.system.WebViewClientWrapper", "onPageFinished", "(Landroid/webkit/WebView;Ljava/lang/String;)V"),
-    "tbwebview_load_url": ("com.baidu.tieba.browser.TbWebView", "loadUrl", "(Ljava/lang/String;)V"),
     "person_tab_attach": ("com.baidu.tieba.personTab.controller.PersonTabWebController", "z", "(Landroid/view/View;Landroid/os/Bundle;)V"),
 }
 
@@ -102,17 +115,239 @@ CLASSES = {
 }
 
 
-def dexsql(apk: str, sql: str) -> str:
-    r = subprocess.run(
-        [DEXSQL, "query", "--input", apk, "--sql", sql],
+# ---- 工具定位 -------------------------------------------------------------
+def _is_executable(path):
+    try:
+        if not path.is_file():
+            return False
+    except OSError:
+        return False
+    if os.name == "nt" or path.suffix.lower() in (".exe", ".bat", ".cmd"):
+        return True
+    return os.access(str(path), os.X_OK)
+
+
+def _check_explicit(label, value):
+    if not value:
+        return None
+    path = Path(value).expanduser()
+    if _is_executable(path):
+        return path
+    # 也允许传裸命令名（例如 --dexsql dexsql.exe），最后按 PATH 解析一次。
+    which = shutil.which(value)
+    if which:
+        return Path(which)
+    raise SystemExit("ERROR: %s is not executable: %s" % (label, value))
+
+
+def _version_key(path):
+    parts = re.split(r"[._-]", path.name)
+    key = []
+    for part in parts:
+        key.append(int(part) if part.isdigit() else -1)
+    return key
+
+
+def sdk_roots():
+    """ANDROID_HOME / ANDROID_SDK_ROOT / local.properties / 常见安装位置。"""
+    roots = []
+    for var in ("ANDROID_HOME", "ANDROID_SDK_ROOT"):
+        value = os.environ.get(var)
+        if value:
+            roots.append(Path(value).expanduser())
+
+    local_props = REPO_ROOT / "local.properties"
+    if local_props.is_file():
+        try:
+            text = local_props.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            text = ""
+        for line in text.splitlines():
+            match = re.match(r"\s*sdk\.dir\s*=\s*(.+?)\s*$", line)
+            if match:
+                value = match.group(1).replace("\\\\", "\\").replace("\\:", ":")
+                roots.append(Path(value).expanduser())
+
+    home = Path.home()
+    roots.extend([
+        home / "Android" / "Sdk",
+        home / "Library" / "Android" / "sdk",
+        home / "AppData" / "Local" / "Android" / "Sdk",
+        Path("/usr/lib/android-sdk"),
+        Path("/opt/android-sdk"),
+    ])
+
+    unique = []
+    seen = set()
+    for root in roots:
+        key = str(root)
+        if key not in seen:
+            seen.add(key)
+            unique.append(root)
+    return unique
+
+
+def resolve_dexsql(explicit):
+    found = _check_explicit("--dexsql", explicit)
+    if found:
+        return found
+    found = _check_explicit("DEXSQL", os.environ.get("DEXSQL"))
+    if found:
+        return found
+
+    candidates = [
+        shutil.which("dexsql"),
+        shutil.which("dexsql.exe"),
+        REPO_ROOT / "tools" / "dexsql" / "dexsql.exe",
+        REPO_ROOT / "tools" / "dexsql" / "dexsql",
+        REPO_ROOT / "tools" / "dexsql.exe",
+        Path.home() / "tools" / "dexsql" / "dexsql.exe",
+        Path.home() / "tools" / "dexsql" / "dexsql",
+        Path.home() / ".local" / "bin" / "dexsql",
+        Path("/usr/local/bin/dexsql"),
+        Path("/opt/dexsql/dexsql"),
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        path = Path(candidate).expanduser()
+        if _is_executable(path):
+            return path
+    raise SystemExit(
+        "ERROR: dexsql not found. Pass --dexsql /path/to/dexsql, set DEXSQL, "
+        "put it on PATH, or install it under tools/dexsql/."
+    )
+
+
+def resolve_aapt(explicit):
+    found = _check_explicit("--aapt2", explicit)
+    if found:
+        return found
+    found = _check_explicit("AAPT2", os.environ.get("AAPT2"))
+    if found:
+        return found
+
+    which = shutil.which("aapt2") or shutil.which("aapt")
+    if which:
+        return Path(which)
+
+    for root in sdk_roots():
+        build_tools = root / "build-tools"
+        if not build_tools.is_dir():
+            continue
+        try:
+            versions = sorted(
+                [p for p in build_tools.iterdir() if p.is_dir()],
+                key=_version_key, reverse=True,
+            )
+        except OSError:
+            continue
+        for version in versions:
+            for name in ("aapt2.exe", "aapt2", "aapt.exe", "aapt"):
+                candidate = version / name
+                if _is_executable(candidate):
+                    return candidate
+    return None
+
+
+def resolve_apkanalyzer(explicit):
+    found = _check_explicit("--apkanalyzer", explicit)
+    if found:
+        return found
+    found = _check_explicit("APKANALYZER", os.environ.get("APKANALYZER"))
+    if found:
+        return found
+
+    which = shutil.which("apkanalyzer") or shutil.which("apkanalyzer.bat")
+    if which:
+        return Path(which)
+
+    for root in sdk_roots():
+        cmdline_tools = root / "cmdline-tools"
+        if cmdline_tools.is_dir():
+            try:
+                versions = sorted(
+                    [p for p in cmdline_tools.iterdir() if p.is_dir()],
+                    key=_version_key, reverse=True,
+                )
+            except OSError:
+                versions = []
+            for version in versions:
+                for name in ("apkanalyzer", "apkanalyzer.bat"):
+                    candidate = version / "bin" / name
+                    if _is_executable(candidate):
+                        return candidate
+        for name in ("apkanalyzer", "apkanalyzer.bat"):
+            candidate = root / "tools" / "bin" / name
+            if _is_executable(candidate):
+                return candidate
+    return None
+
+
+# ---- APK 版本 -------------------------------------------------------------
+def _run(cmd):
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+        )
+    except OSError:
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout
+
+
+def _last_line(text):
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return lines[-1] if lines else None
+
+
+def _apkanalyzer_value(tool, prop, apk):
+    # 不同版本的 apkanalyzer 对 --file 的位置要求不同，两种形式都试。
+    commands = [
+        [str(tool), "manifest", prop, str(apk)],
+        [str(tool), "--file", str(apk), "manifest", prop],
+    ]
+    for cmd in commands:
+        output = _run(cmd)
+        value = _last_line(output) if output else None
+        if value:
+            return value
+    return None
+
+
+def read_apk_version(apk, aapt, apkanalyzer):
+    name = None
+    code = None
+    if aapt:
+        output = _run([str(aapt), "dump", "badging", str(apk)])
+        if output:
+            match = re.search(r"versionName='([^']*)'", output)
+            if match:
+                name = match.group(1)
+            match = re.search(r"versionCode='([0-9]+)'", output)
+            if match:
+                code = match.group(1)
+    if apkanalyzer and name is None:
+        name = _apkanalyzer_value(apkanalyzer, "version-name", apk)
+    if apkanalyzer and code is None:
+        code = _apkanalyzer_value(apkanalyzer, "version-code", apk)
+    return name, code
+
+
+# ---- DexSQL ---------------------------------------------------------------
+def dexsql(tool, apk, sql):
+    result = subprocess.run(
+        [str(tool), "query", "--input", str(apk), "--sql", sql],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
-    if r.returncode != 0:
-        raise RuntimeError(r.stderr.strip() or r.stdout.strip())
-    return r.stdout
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip())
+    return result.stdout
 
 
-def table_rows(output: str):
+def table_rows(output):
     """Parse DexSQL's ASCII table; return list of cells per data row."""
     rows = []
     for line in output.splitlines():
@@ -126,20 +361,88 @@ def table_rows(output: str):
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--apk", required=True)
-    ap.add_argument("--out", required=True)
-    args = ap.parse_args()
+    parser = argparse.ArgumentParser(
+        description="用 DexSQL 校验 hook 锚点并生成 anchors.json。",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--apk", required=True, help="目标 APK")
+    parser.add_argument("--out", required=True, help="输出 anchors.json")
+    parser.add_argument(
+        "--dexsql",
+        help="dexsql 可执行文件（默认：DEXSQL 环境变量 / PATH / 仓库 tools/dexsql/ / 常见路径）",
+    )
+    parser.add_argument("--aapt2", help="aapt2/aapt 可执行文件（读取 APK versionName）")
+    parser.add_argument("--apkanalyzer", help="apkanalyzer 可执行文件（读取 APK 版本）")
+    parser.add_argument(
+        "--app-version", default=os.environ.get("APP_VERSION"),
+        help="APK 读取失败时显式指定 versionName（建议仅作兜底）",
+    )
+    parser.add_argument(
+        "--version-code", default=os.environ.get("VERSION_CODE"),
+        help="APK 读取失败时显式指定 versionCode（建议仅作兜底）",
+    )
+    args = parser.parse_args()
 
-    # app version
-    ver_out = dexsql(args.apk, "SELECT count(*) FROM classes")
-    print("dexsql ok:", ver_out.strip().splitlines()[-2].strip("| ") if ver_out else "?")
+    apk = Path(args.apk).expanduser()
+    if not apk.is_file():
+        raise SystemExit("ERROR: APK not found: %s" % apk)
+
+    dexsql_path = resolve_dexsql(args.dexsql)
+    aapt = resolve_aapt(args.aapt2)
+    apkanalyzer = resolve_apkanalyzer(args.apkanalyzer)
+
+    app_version, version_code = read_apk_version(apk, aapt, apkanalyzer)
+    if not app_version:
+        if args.app_version:
+            app_version = args.app_version
+            print(
+                "WARN: 无法从 APK 读取 versionName，使用 --app-version=%s" % app_version,
+                file=sys.stderr,
+            )
+        else:
+            raise SystemExit(
+                "ERROR: 无法从 APK 读取 versionName（aapt2/aapt/apkanalyzer 不可用或失败）；"
+                "请安装工具，或显式传 --app-version"
+            )
+    if not version_code:
+        if args.version_code:
+            version_code = args.version_code
+            print(
+                "WARN: 无法从 APK 读取 versionCode，使用 --version-code=%s" % version_code,
+                file=sys.stderr,
+            )
+        else:
+            raise SystemExit(
+                "ERROR: 无法从 APK 读取 versionCode（aapt2/aapt/apkanalyzer 不可用或失败）；"
+                "请安装工具，或显式传 --version-code"
+            )
+    try:
+        version_code_value = int(str(version_code).strip())
+    except ValueError:
+        raise SystemExit("ERROR: versionCode 不是整数: %r" % version_code)
+
+    print("APK: %s" % apk)
+    print("appVersion: %s (versionCode %d)" % (app_version, version_code_value))
+    print("dexsql: %s" % dexsql_path)
+
+    try:
+        ver_out = dexsql(dexsql_path, apk, "SELECT count(*) AS c FROM classes")
+    except RuntimeError as exc:
+        raise SystemExit("ERROR: dexsql failed: %s" % exc)
+    rows = table_rows(ver_out)
+    print("dexsql ok: classes=%s" % (rows[-1][0] if rows else "?"))
 
     anchors = {}
     missing = []
     for key, (cls, name, sig) in ANCHORS.items():
-        full = f"L{cls.replace('.', '/')};->{name}{sig}"
-        out = dexsql(args.apk, f"SELECT count(*) AS c FROM methods WHERE descriptor='{full}'")
+        full = "L%s;->%s%s" % (cls.replace(".", "/"), name, sig)
+        try:
+            out = dexsql(
+                dexsql_path, apk,
+                "SELECT count(*) AS c FROM methods WHERE descriptor='%s'" % full,
+            )
+        except RuntimeError as exc:
+            raise SystemExit("ERROR: dexsql failed for anchor %s: %s" % (key, exc))
         rows = table_rows(out)
         # last row is the value; earlier rows may be headers
         ok = bool(rows) and rows[-1][0].isdigit() and int(rows[-1][0]) > 0
@@ -147,31 +450,76 @@ def main():
             anchors[key] = {"c": cls, "m": name, "s": sig}
         else:
             missing.append((key, full))
-            print(f"MISSING {key}: {full}")
+            print("MISSING %s: %s" % (key, full))
 
     classes = {}
     for key, cls in CLASSES.items():
-        out = dexsql(args.apk, f"SELECT count(*) AS c FROM types WHERE java_name='{cls}'")
+        try:
+            out = dexsql(
+                dexsql_path, apk,
+                "SELECT count(*) AS c FROM types WHERE java_name='%s'" % cls,
+            )
+        except RuntimeError as exc:
+            raise SystemExit("ERROR: dexsql failed for class %s: %s" % (key, exc))
         rows = table_rows(out)
         ok = bool(rows) and rows[-1][0].isdigit() and int(rows[-1][0]) > 0
         if ok:
             classes[key] = cls
         else:
             missing.append((key, cls))
-            print(f"MISSING class {key}: {cls}")
+            print("MISSING class %s: %s" % (key, cls))
+
+    out_path = Path(args.out).expanduser()
+    if missing:
+        print(
+            "ERROR: %d 个锚点/类缺失，未写入 %s（保留原文件）"
+            % (len(missing), out_path),
+            file=sys.stderr,
+        )
+        return 1
 
     payload = {
-        "appVersion": "22.12.1.0",
-        "versionCode": 369885440,
+        "appVersion": app_version,
+        "versionCode": version_code_value,
         "generatedBy": "tools/gen_anchors.py",
         "anchors": anchors,
         "classes": classes,
     }
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"wrote {out} ({len(anchors)} methods, {len(classes)} classes, {len(missing)} missing)")
-    return 1 if missing else 0
+    try:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise SystemExit("ERROR: cannot create output dir %s: %s" % (out_path.parent, exc))
+
+    # 先写同目录临时文件，全部成功后再 rename，避免半成品覆盖旧 anchors.json。
+    tmp_path = None
+    try:
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=out_path.name + ".", suffix=".tmp", dir=str(out_path.parent),
+        )
+        tmp_path = Path(tmp_name)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        # mkstemp 默认 0600；沿用旧文件权限（不存在则 0644），避免输出权限突变。
+        try:
+            mode = out_path.stat().st_mode & 0o777 if out_path.exists() else 0o644
+            os.chmod(str(tmp_path), mode)
+        except OSError:
+            pass
+        os.replace(str(tmp_path), str(out_path))
+        tmp_path = None
+    except OSError as exc:
+        raise SystemExit("ERROR: cannot write %s: %s" % (out_path, exc))
+    finally:
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+
+    print("wrote %s (%d methods, %d classes)" % (out_path, len(anchors), len(classes)))
+    return 0
 
 
 if __name__ == "__main__":

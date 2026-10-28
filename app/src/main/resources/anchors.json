@@ -188,16 +188,6 @@
       "m": "getShowAdSubscript",
       "s": "()Z"
     },
-    "thread_is_bjh": {
-      "c": "com.baidu.tbadk.core.data.ThreadData",
-      "m": "isBjh",
-      "s": "()Z"
-    },
-    "thread_is_smartapp": {
-      "c": "com.baidu.tbadk.core.data.ThreadData",
-      "m": "isSmartAppThreadType",
-      "s": "()Z"
-    },
     "thread_is_live": {
       "c": "com.baidu.tbadk.core.data.ThreadData",
       "m": "isAlaLiveMixThreadType",
@@ -206,11 +196,6 @@
     "thread_is_act": {
       "c": "com.baidu.tbadk.core.data.ThreadData",
       "m": "isActInfo",
-      "s": "()Z"
-    },
-    "thread_is_ugc": {
-      "c": "com.baidu.tbadk.core.data.ThreadData",
-      "m": "isUgcThreadType",
       "s": "()Z"
     },
     "pid_loader_load": {
@@ -238,16 +223,6 @@
       "m": "addR",
       "s": "(Ltbclient/PbList/DataReq$Builder;)V"
     },
-    "big_image_loader": {
-      "c": "com.baidu.tbadk.core.util.resourceLoaderProc.BigImageLoaderProc",
-      "m": "getFromRemote",
-      "s": "(Ljava/lang/String;Ljava/lang/String;IILcom/baidu/tieba/q8;[Ljava/lang/Object;)Ljava/lang/Object;"
-    },
-    "save_image": {
-      "c": "com.baidu.tbadk.core.util.FileHelper",
-      "m": "saveImageFileByUser",
-      "s": "(Ljava/lang/String;[BLandroid/content/Context;)I"
-    },
     "watermark_type": {
       "c": "com.baidu.tieba.j76",
       "m": "b",
@@ -267,11 +242,6 @@
       "c": "com.baidu.tieba.signall.SignAllForumModel",
       "m": "loadData",
       "s": "()Z"
-    },
-    "sign_single_y0": {
-      "c": "com.baidu.tieba.signall.SignSingleModel",
-      "m": "Y0",
-      "s": "(Ljava/lang/String;Ljava/lang/String;)V"
     },
     "clipboard": {
       "c": "com.baidu.tbadk.core.util.UtilHelper",
@@ -297,16 +267,6 @@
       "c": "com.baidu.tieba.bie",
       "m": "h",
       "s": "(Lcom/baidu/tbadk/core/data/AdvertAppInfo;)Z"
-    },
-    "webview_page_finished": {
-      "c": "com.baidu.webkit.sdk.system.WebViewClientWrapper",
-      "m": "onPageFinished",
-      "s": "(Landroid/webkit/WebView;Ljava/lang/String;)V"
-    },
-    "tbwebview_load_url": {
-      "c": "com.baidu.tieba.browser.TbWebView",
-      "m": "loadUrl",
-      "s": "(Ljava/lang/String;)V"
     },
     "person_tab_attach": {
       "c": "com.baidu.tieba.personTab.controller.PersonTabWebController",
