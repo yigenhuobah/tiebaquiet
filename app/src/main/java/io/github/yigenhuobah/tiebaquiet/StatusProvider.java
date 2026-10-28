@@ -152,6 +152,17 @@ public final class StatusProvider extends ContentProvider {
         } catch (Throwable t) {
             store = null;
         }
+        return failedFeatureCount(context, store);
+    }
+
+    /**
+     * 复用调用方已经拿到的 ConfigStore，避免在后台刷新时重复创建 store、
+     * 重复走一遍 remote prefs binder。调用方必须保证在后台线程执行。
+     */
+    public static int failedFeatureCount(Context context, ConfigStore store) {
+        if (context == null) {
+            return 0;
+        }
         int failed = 0;
         for (Feature feature : FeatureRegistry.all()) {
             if (feature.blocked()) {

@@ -14,6 +14,8 @@ import androidx.fragment.app.Fragment;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -27,6 +29,9 @@ import io.github.yigenhuobah.tiebaquiet.feature.phase2.SignInFeature;
  *
  * <p>主页面零诊断：这里不展示逐功能 registered/hit/skip，只保留状态卡和聚合横幅；
  * 细节统一放到 {@link DiagnosticsFragment}。
+ *
+ * <p>线程模型：ConfigStore 构造、remote prefs 读取、PackageManager 查询、
+ * failedFeatureCount 与框架状态查询全部在后台单线程执行，结果回主线程更新 UI。
  */
 public class SettingsFragment extends PreferenceFragmentCompat {
 
@@ -41,11 +46,12 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     private static final int FAILED_BANNER_THRESHOLD = 2;
 
     /**
-     * 状态卡的框架查询是同步 binder，放后台单线程执行，避免框架卡顿时拖住设置页首帧。
+     * 设置页的后台单线程：binder、PackageManager 与 prefs 读取都放这里，
+     * 避免框架卡顿时拖住设置页首帧，也避免主线程同步 I/O。
      */
-    private static final ExecutorService STATUS_EXECUTOR =
+    private static final ExecutorService BG_EXECUTOR =
             Executors.newSingleThreadExecutor(r -> {
-                Thread t = new Thread(r, "tiebaquiet-settings-status");
+                Thread t = new Thread(r, "tiebaquiet-settings-bg");
                 t.setDaemon(true);
                 return t;
             });
@@ -54,21 +60,28 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     /** mStore 对应的 service 实例；同一实例内 remote prefs 不变，可复用。 */
     private XposedService mStoreService;
 
-    /** 后台状态查询句柄：新查询提交前取消旧的，onDestroyView 取消全部。 */
-    private Future<?> mStatusFuture;
-    /** 查询代次：旧查询即使无法中断，也不能覆盖新查询的结果。 */
-    private int mStatusGeneration;
-    /** versionName 在 Fragment 生命周期内不变，只读一次 PackageManager。 */
-    private String mVersionName;
+    /** 后台刷新句柄：新刷新提交前取消旧的，onDestroyView 取消全部。 */
+    private Future<?> mLoadFuture;
+    /** 刷新代次：旧任务即使无法中断，也不能覆盖新任务的结果。 */
+    private int mLoadGeneration;
+
+    /** PackageManager 结果缓存；只在后台单线程读写，避免每次 onResume 重复 IPC。 */
+    private boolean mTargetVersionQueried;
+    private String mTargetVersion;
+    private boolean mModuleVersionQueried;
+    private String mModuleVersion;
+
+    /**
+     * 已接受但尚未收到 commit 结果的写入。刷新若先读到旧值，不能用它覆盖
+     * 用户刚切换的 UI；回调到达后按 key 清理。
+     */
+    private final Map<String, Boolean> mPendingWrites = new HashMap<>();
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
         setPreferencesFromResource(R.xml.prefs, rootKey);
-        mStoreService = ServiceBridge.get();
-        mStore = new ConfigStore(requireContext());
         bindFeatures();
         bindPages();
-        refresh();
     }
 
     @Override
@@ -79,12 +92,13 @@ public class SettingsFragment extends PreferenceFragmentCompat {
 
     @Override
     public void onDestroyView() {
-        // view 已销毁，后台查询结果不再有用；cancel(true) 让阻塞中的 binder 尽快返回。
-        if (mStatusFuture != null) {
-            mStatusFuture.cancel(true);
-            mStatusFuture = null;
+        // view 已销毁，后台结果不再有用；cancel(true) 让阻塞中的 binder 尽快返回。
+        if (mLoadFuture != null) {
+            mLoadFuture.cancel(true);
+            mLoadFuture = null;
         }
-        mStatusGeneration++;
+        mLoadGeneration++;
+        mPendingWrites.clear();
         super.onDestroyView();
     }
 
@@ -106,15 +120,51 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 continue;
             }
 
+            // 后台确认 remote 可用之前不允许切换，避免首帧就能点到“写不进去”的开关。
+            p.setEnabled(false);
             p.setOnPreferenceChangeListener((pref, value) -> {
-                if (value instanceof Boolean) {
-                    boolean ok = mStore.put(f.key, (Boolean) value);
-                    if (!ok) {
-                        Toast.makeText(requireContext(), R.string.action_write_failed,
-                                Toast.LENGTH_SHORT).show();
-                        // 返回 false：MaterialSwitch 回滚到旧状态。
-                        return false;
+                if (!(value instanceof Boolean)) {
+                    return true;
+                }
+                final boolean next = (Boolean) value;
+                final boolean previous = pref instanceof MaterialSwitchPreference
+                        ? ((MaterialSwitchPreference) pref).isCheckedValue() : !next;
+                final ConfigStore store = mStore;
+                if (store == null) {
+                    Toast.makeText(requireContext(), R.string.action_write_failed,
+                            Toast.LENGTH_SHORT).show();
+                    return false;
+                }
+                mPendingWrites.put(f.key, next);
+                if (!store.put(f.key, next, (key, success) -> {
+                    Boolean pending = mPendingWrites.get(key);
+                    if (pending != null && pending.booleanValue() == next) {
+                        mPendingWrites.remove(key);
+                    } else {
+                        // 已有更新的写入排队，本次结果不再影响 UI。
+                        return;
                     }
+                    if (success) {
+                        return;
+                    }
+                    // commit 失败：Toast 并回滚，避免 UI 显示“已保存”但目标进程读不到。
+                    if (!isAdded() || getContext() == null) {
+                        return;
+                    }
+                    Toast.makeText(requireContext(), R.string.action_write_failed,
+                            Toast.LENGTH_SHORT).show();
+                    Preference current = findPreference(key);
+                    if (current instanceof MaterialSwitchPreference) {
+                        ((MaterialSwitchPreference) current).setCheckedValue(previous);
+                    }
+                    // 再从真实存储回读一次，处理快速连点导致 previous 本身是乐观值的场景。
+                    refresh();
+                })) {
+                    mPendingWrites.remove(f.key);
+                    Toast.makeText(requireContext(), R.string.action_write_failed,
+                            Toast.LENGTH_SHORT).show();
+                    // 返回 false：MaterialSwitch 回滚到旧状态。
+                    return false;
                 }
                 return true;
             });
@@ -123,8 +173,16 @@ public class SettingsFragment extends PreferenceFragmentCompat {
 
     /** 一键签到、二级页入口与页脚。 */
     private void bindPages() {
+        Preference status = findPreference("status");
+        if (status != null) {
+            status.setTitle(R.string.status_connecting);
+            status.setSummary(getString(R.string.status_detail_connecting,
+                    getString(R.string.status_unknown_version)));
+        }
+
         Preference sign = findPreference("action_sign_in");
         if (sign != null) {
+            sign.setEnabled(false);
             sign.setOnPreferenceClickListener(p -> {
                 triggerSignIn();
                 return true;
@@ -154,34 +212,71 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     }
 
     /**
-     * 一键签到：先写 one_key_sign，再拉起贴吧，1.2 秒后发显式广播。
-     * 贴吧在后台时不允许其进程直接拉起 Activity，所以必须先带到前台。
+     * 一键签到：先异步写 one_key_sign，commit 成功后再拉起贴吧，
+     * 1.2 秒后发显式广播。PackageManager 查询也放后台，主线程只负责启动 Activity。
      */
     private void triggerSignIn() {
-        if (getContext() == null) {
-            return;
-        }
-        if (!mStore.put(SignInFeature.KEY, true)) {
+        final ConfigStore store = mStore;
+        if (store == null || !store.remote()) {
             Toast.makeText(requireContext(), R.string.action_write_failed,
                     Toast.LENGTH_SHORT).show();
             return;
         }
-        Intent launch = requireContext().getPackageManager().getLaunchIntentForPackage(TARGET);
-        if (launch == null) {
-            Toast.makeText(requireContext(), R.string.action_launch_failed,
-                    Toast.LENGTH_SHORT).show();
-            return;
-        }
-        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        final Activity host = requireActivity();
         final Context appContext = requireContext().getApplicationContext();
-        requireContext().startActivity(launch);
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            try {
-                appContext.sendBroadcast(new Intent(SignInFeature.ACTION_SIGN).setPackage(TARGET));
-            } catch (Throwable t) {
-                Log.w(TAG, "sign broadcast failed", t);
+        if (!store.put(SignInFeature.KEY, true, (key, success) -> {
+            if (!isAdded() || getActivity() != host) {
+                return;
             }
-        }, SIGN_BROADCAST_DELAY_MS);
+            if (!success) {
+                Toast.makeText(requireContext(), R.string.action_write_failed,
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+            launchTargetAndBroadcast(host, appContext);
+        })) {
+            Toast.makeText(requireContext(), R.string.action_write_failed,
+                    Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void launchTargetAndBroadcast(final Activity host, final Context appContext) {
+        BG_EXECUTOR.execute(() -> {
+            Intent launch = null;
+            try {
+                launch = appContext.getPackageManager().getLaunchIntentForPackage(TARGET);
+            } catch (Throwable t) {
+                Log.w(TAG, "getLaunchIntent failed", t);
+            }
+            final Intent intent = launch;
+            host.runOnUiThread(() -> {
+                if (!isAdded() || getActivity() != host) {
+                    return;
+                }
+                if (intent == null) {
+                    Toast.makeText(requireContext(), R.string.action_launch_failed,
+                            Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                try {
+                    appContext.startActivity(intent);
+                } catch (Throwable t) {
+                    Log.w(TAG, "launch failed", t);
+                    Toast.makeText(requireContext(), R.string.action_launch_failed,
+                            Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    try {
+                        appContext.sendBroadcast(
+                                new Intent(SignInFeature.ACTION_SIGN).setPackage(TARGET));
+                    } catch (Throwable t) {
+                        Log.w(TAG, "sign broadcast failed", t);
+                    }
+                }, SIGN_BROADCAST_DELAY_MS);
+            });
+        });
     }
 
     /** 重新读取框架状态与开关值。service 绑定后由 MainActivity 调一次。 */
@@ -189,19 +284,57 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         if (getContext() == null) {
             return;
         }
-        XposedService service = ServiceBridge.get();
-        // 同一 service 实例内 remote prefs 不会变，复用 mStore 可省掉每次 refresh 的 binder。
-        if (mStore == null || service != mStoreService) {
-            mStore = new ConfigStore(requireContext());
-            mStoreService = service;
-        }
-        boolean writable = mStore.remote();
+        final Context appContext = requireContext().getApplicationContext();
+        final Activity host = requireActivity();
+        final XposedService service = ServiceBridge.get();
+        final ConfigStore cachedStore = mStore;
+        final XposedService cachedService = mStoreService;
+        final boolean reuse = ConfigStorePolicy.reuseStore(
+                cachedStore != null, cachedService, service);
+        final int generation = ++mLoadGeneration;
 
+        if (mLoadFuture != null) {
+            mLoadFuture.cancel(false);
+        }
+        mLoadFuture = BG_EXECUTOR.submit(() -> {
+            ConfigStore store = reuse ? cachedStore : new ConfigStore(appContext);
+            Map<String, Boolean> values = new HashMap<>();
+            for (Feature f : FeatureRegistry.all()) {
+                values.put(f.key, store.get(f.key, f.defaultEnabled));
+            }
+            String targetVersion = targetVersion(appContext);
+            String moduleVersion = moduleVersion(appContext);
+            int failed = StatusProvider.failedFeatureCount(appContext, store);
+            ServiceBridge.Status status = ServiceBridge.status(TARGET);
+
+            host.runOnUiThread(() -> {
+                if (generation != mLoadGeneration || !isAdded() || getActivity() != host) {
+                    return;
+                }
+                mStore = store;
+                mStoreService = service;
+                applyLoadedState(store.remote(), values, targetVersion, moduleVersion,
+                        failed, status);
+            });
+        });
+    }
+
+    /** 后台结果回主线程后一次性更新开关、状态卡与横幅。 */
+    private void applyLoadedState(boolean writable, Map<String, Boolean> values,
+                                  String targetVersion, String moduleVersion,
+                                  int failedCount, ServiceBridge.Status status) {
         for (Feature f : FeatureRegistry.all()) {
             Preference p = findPreference(f.key);
             if (p instanceof MaterialSwitchPreference) {
                 MaterialSwitchPreference sw = (MaterialSwitchPreference) p;
-                sw.setCheckedValue(mStore.get(f.key, f.defaultEnabled));
+                Boolean pending = mPendingWrites.get(f.key);
+                if (pending != null) {
+                    // 写入尚未 commit，保留用户的乐观值，避免刷新读到的旧值覆盖它。
+                    sw.setCheckedValue(pending);
+                } else {
+                    Boolean value = values.get(f.key);
+                    sw.setCheckedValue(value != null ? value : f.defaultEnabled);
+                }
                 // 框架没绑定时写不进去，置灰避免“改了没用”；blocked 始终置灰。
                 sw.setEnabled(writable && !f.blocked());
             }
@@ -212,83 +345,60 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             sign.setEnabled(writable);
         }
 
-        updateBanner();
-        loadStatusAsync();
-    }
-
-    /**
-     * 状态卡的 service 查询全在后台单线程跑，结果回主线程写 UI。
-     * Fragment 已 detach 或 Activity 已更换时整份结果丢弃。
-     */
-    private void loadStatusAsync() {
-        final boolean writable = mStore.remote();
-        final String targetVersion = shownTargetVersion();
-        final String moduleVersion = versionName();
-        final Activity host = requireActivity();
-        final int generation = ++mStatusGeneration;
-
-        if (mStatusFuture != null) {
-            mStatusFuture.cancel(false);
-        }
-        mStatusFuture = STATUS_EXECUTOR.submit(() -> {
-            ServiceBridge.Status status = ServiceBridge.status(TARGET);
-            if (!isAdded() || getActivity() != host) {
-                return;
-            }
-            host.runOnUiThread(() -> {
-                if (generation != mStatusGeneration || !isAdded() || getActivity() != host) {
-                    return;
-                }
-                Preference p = findPreference("status");
-                if (p == null) {
-                    return;
-                }
-                String targetApp = getString(R.string.app_target_name);
-                if (!status.isConnected()) {
-                    p.setTitle(R.string.status_connecting);
-                    p.setSummary(getString(R.string.status_detail_connecting, targetVersion));
-                } else if (!status.isScoped()) {
-                    p.setTitle(R.string.status_inactive);
-                    p.setSummary(getString(R.string.status_detail_no_scope,
-                            status.getApiVersion(), targetApp, targetVersion, moduleVersion));
-                } else if (status.isInjected()) {
-                    p.setTitle(R.string.status_active);
-                    p.setSummary(getString(R.string.status_detail_active,
-                            status.getApiVersion(), targetApp, targetVersion, moduleVersion));
-                } else {
-                    p.setTitle(R.string.status_connected);
-                    p.setSummary(getString(R.string.status_detail_not_running,
-                            status.getApiVersion(), targetApp, targetVersion, moduleVersion));
-                }
-                appendRemoteState(p, writable);
-            });
-        });
+        updateBanner(targetVersion, failedCount);
+        updateStatusCard(status, writable, targetVersion, moduleVersion);
     }
 
     /**
      * 异常横幅：版本不匹配，或“已启用且明确失败”的功能数 ≥ 2。
      * 不新增第五种状态卡状态。
      */
-    private void updateBanner() {
+    private void updateBanner(String targetVersion, int failedCount) {
         Preference banner = findPreference("warning");
         if (banner == null || getContext() == null) {
             return;
         }
-        String target = targetVersion();
-        if (target != null && !TARGET_VERSION.equals(target)) {
-            banner.setSummary(getString(R.string.status_banner_version, target,
+        if (targetVersion != null && !TARGET_VERSION.equals(targetVersion)) {
+            banner.setSummary(getString(R.string.status_banner_version, targetVersion,
                     TARGET_VERSION));
             banner.setVisible(true);
             return;
         }
-        int failed = StatusProvider.failedFeatureCount(requireContext());
-        if (failed >= FAILED_BANNER_THRESHOLD) {
-            banner.setSummary(getString(R.string.status_banner_failed, failed));
+        if (failedCount >= FAILED_BANNER_THRESHOLD) {
+            banner.setSummary(getString(R.string.status_banner_failed, failedCount));
             banner.setVisible(true);
         } else {
             // 目标应用未安装或失败数不足：不显示横幅，避免误导。
             banner.setVisible(false);
         }
+    }
+
+    private void updateStatusCard(ServiceBridge.Status status, boolean writable,
+                                  String targetVersion, String moduleVersion) {
+        Preference p = findPreference("status");
+        if (p == null) {
+            return;
+        }
+        String shownVersion = targetVersion != null
+                ? targetVersion : getString(R.string.status_unknown_version);
+        String targetApp = getString(R.string.app_target_name);
+        if (!status.isConnected()) {
+            p.setTitle(R.string.status_connecting);
+            p.setSummary(getString(R.string.status_detail_connecting, shownVersion));
+        } else if (!status.isScoped()) {
+            p.setTitle(R.string.status_inactive);
+            p.setSummary(getString(R.string.status_detail_no_scope,
+                    status.getApiVersion(), targetApp, shownVersion, moduleVersion));
+        } else if (status.isInjected()) {
+            p.setTitle(R.string.status_active);
+            p.setSummary(getString(R.string.status_detail_active,
+                    status.getApiVersion(), targetApp, shownVersion, moduleVersion));
+        } else {
+            p.setTitle(R.string.status_connected);
+            p.setSummary(getString(R.string.status_detail_not_running,
+                    status.getApiVersion(), targetApp, shownVersion, moduleVersion));
+        }
+        appendRemoteState(p, writable);
     }
 
     /** remote prefs 可用性挂在状态卡副标题第二行，抓“开关写不进框架”这个坑。 */
@@ -308,31 +418,31 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 .commit();
     }
 
-    private String targetVersion() {
+    /** 目标版本只在首次刷新时查一次；后续 onResume/框架回调复用缓存。 */
+    private String targetVersion(Context context) {
+        if (!mTargetVersionQueried) {
+            mTargetVersion = queryVersionName(context, TARGET);
+            mTargetVersionQueried = true;
+        }
+        return mTargetVersion;
+    }
+
+    /** 模块版本在进程生命周期内不变，查询一次即可。 */
+    private String moduleVersion(Context context) {
+        if (!mModuleVersionQueried) {
+            String v = queryVersionName(context, context.getPackageName());
+            mModuleVersion = v != null ? v : "?";
+            mModuleVersionQueried = true;
+        }
+        return mModuleVersion;
+    }
+
+    private static String queryVersionName(Context context, String packageName) {
         try {
-            PackageInfo pi = requireContext().getPackageManager().getPackageInfo(TARGET, 0);
+            PackageInfo pi = context.getPackageManager().getPackageInfo(packageName, 0);
             return pi.versionName;
         } catch (Throwable t) {
             return null;
         }
-    }
-
-    private String shownTargetVersion() {
-        String v = targetVersion();
-        return v != null ? v : getString(R.string.status_unknown_version);
-    }
-
-    private String versionName() {
-        if (mVersionName != null) {
-            return mVersionName;
-        }
-        try {
-            String v = requireContext().getPackageManager()
-                    .getPackageInfo(requireContext().getPackageName(), 0).versionName;
-            mVersionName = v != null ? v : "?";
-        } catch (Throwable t) {
-            mVersionName = "?";
-        }
-        return mVersionName;
     }
 }

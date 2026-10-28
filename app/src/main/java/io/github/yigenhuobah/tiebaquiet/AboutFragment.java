@@ -1,5 +1,7 @@
 package io.github.yigenhuobah.tiebaquiet;
 
+import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.graphics.Color;
@@ -21,6 +23,10 @@ import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceScreen;
 import androidx.preference.PreferenceViewHolder;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
 /**
  * 关于页：模块/版本、目标应用、源码、四模块互链、免责声明、许可证。
  *
@@ -32,6 +38,24 @@ public class AboutFragment extends PreferenceFragmentCompat {
     private static final String CURRENT_APPLICATION_ID = "io.github.yigenhuobah.tiebaquiet";
     private static final String SOURCE_URL = "https://github.com/yigenhuobah/tiebaquiet";
     private static final String LICENSE_URL = SOURCE_URL + "/blob/main/LICENSE";
+    private static final String KEY_VERSION = "about_version";
+
+    /**
+     * 版本号查询放后台单线程；结果进程内缓存，反复进入关于页不再重复
+     * PackageManager IPC，主线程也不做同步 binder。
+     */
+    private static final ExecutorService BG_EXECUTOR =
+            Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "tiebaquiet-about");
+                t.setDaemon(true);
+                return t;
+            });
+    private static final Object VERSION_LOCK = new Object();
+    private static boolean sVersionLoaded;
+    private static String sVersionName = "?";
+    private static int sVersionCode;
+
+    private Future<?> mVersionFuture;
 
     private static final int[] LINK_NAME_RES = {
             R.string.about_module_cloudmusictool,
@@ -63,8 +87,10 @@ public class AboutFragment extends PreferenceFragmentCompat {
         PreferenceScreen screen = getPreferenceManager().createPreferenceScreen(requireContext());
         setPreferenceScreen(screen);
 
-        screen.addPreference(info(R.string.app_name,
-                getString(R.string.about_version, versionName(), versionCode())));
+        Preference version = info(R.string.app_name, versionSummary());
+        version.setKey(KEY_VERSION);
+        screen.addPreference(version);
+        loadVersionIfNeeded();
 
         screen.addPreference(info(R.string.about_target,
                 getString(R.string.about_target_value, getString(R.string.app_target_name),
@@ -165,23 +191,59 @@ public class AboutFragment extends PreferenceFragmentCompat {
         }
     }
 
-    private String versionName() {
-        try {
-            String v = requireContext().getPackageManager()
-                    .getPackageInfo(requireContext().getPackageName(), 0).versionName;
-            return v != null ? v : "?";
-        } catch (Throwable t) {
-            return "?";
+    @Override
+    public void onDestroyView() {
+        if (mVersionFuture != null) {
+            mVersionFuture.cancel(true);
+            mVersionFuture = null;
+        }
+        super.onDestroyView();
+    }
+
+    private CharSequence versionSummary() {
+        synchronized (VERSION_LOCK) {
+            return getString(R.string.about_version, sVersionName, sVersionCode);
         }
     }
 
-    private int versionCode() {
-        try {
-            PackageInfo pi = requireContext().getPackageManager()
-                    .getPackageInfo(requireContext().getPackageName(), 0);
-            return (int) pi.getLongVersionCode();
-        } catch (Throwable t) {
-            return 0;
+    /** 版本号只查一次；已缓存时直接复用，避免每次进入关于页重复 PackageManager IPC。 */
+    private void loadVersionIfNeeded() {
+        synchronized (VERSION_LOCK) {
+            if (sVersionLoaded) {
+                return;
+            }
         }
+        final Context appContext = requireContext().getApplicationContext();
+        final Activity host = requireActivity();
+        mVersionFuture = BG_EXECUTOR.submit(() -> {
+            String name = "?";
+            int code = 0;
+            try {
+                PackageInfo pi = appContext.getPackageManager()
+                        .getPackageInfo(appContext.getPackageName(), 0);
+                if (pi.versionName != null) {
+                    name = pi.versionName;
+                }
+                code = (int) pi.getLongVersionCode();
+            } catch (Throwable ignored) {
+                // 查询失败保留占位值，不影响关于页其他内容。
+            }
+            synchronized (VERSION_LOCK) {
+                sVersionName = name;
+                sVersionCode = code;
+                sVersionLoaded = true;
+            }
+            final String loadedName = name;
+            final int loadedCode = code;
+            host.runOnUiThread(() -> {
+                if (!isAdded() || getActivity() != host) {
+                    return;
+                }
+                Preference p = findPreference(KEY_VERSION);
+                if (p != null) {
+                    p.setSummary(getString(R.string.about_version, loadedName, loadedCode));
+                }
+            });
+        });
     }
 }

@@ -71,6 +71,14 @@ android {
         buildConfig false
     }
 
+    testOptions {
+        unitTests {
+            // ConfigStore 的 JVM 单测会走 android.util.Log 的失败日志分支；
+            // 让未实现的 Android stub 返回默认值而不是抛 "Stub!"。
+            returnDefaultValues = true
+        }
+    }
+
     packaging {
         resources {
             excludes += 'META-INF/versions/9/OSGI-INF/MANIFEST.MF'
