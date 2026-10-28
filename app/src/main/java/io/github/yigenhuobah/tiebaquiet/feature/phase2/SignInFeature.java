@@ -4,10 +4,11 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+
+import androidx.core.content.ContextCompat;
 
 import io.github.yigenhuobah.tiebaquiet.Feature;
 import io.github.yigenhuobah.tiebaquiet.FeatureRegistry;
@@ -72,12 +73,8 @@ public final class SignInFeature {
                     Context ctx = Phase2Features.HostApp.context();
                     if (ctx != null) {
                         try {
-                            if (Build.VERSION.SDK_INT >= 33) {
-                                ctx.registerReceiver(receiver, filter,
-                                        Context.RECEIVER_EXPORTED);
-                            } else {
-                                ctx.registerReceiver(receiver, filter);
-                            }
+                            ContextCompat.registerReceiver(ctx, receiver, filter,
+                                    ContextCompat.RECEIVER_EXPORTED);
                             env.module.log(Log.INFO, TAG,
                                     "sign receiver registered (attempt " + (attempt + 1) + ")");
                             return;
