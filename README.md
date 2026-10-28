@@ -82,7 +82,7 @@
 
 ## 构建
 
-要求：JDK 17、Android SDK Platform 37（libxposed 102 的 aar 要求 `compileSdk 37`）。
+要求：JDK 17 及以上（CI 使用 21）、Android SDK Platform 37（libxposed 102 的 aar 要求 `compileSdk 37`）。
 
 ```bash
 ./gradlew :app:assembleDebug
