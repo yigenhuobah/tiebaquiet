@@ -26,6 +26,9 @@ public final class SignInFeature {
     public static final String ACTION_SIGN =
             "io.github.yigenhuobah.tiebaquiet.action.SIGN";
     public static final String TARGET_PACKAGE = "com.baidu.tieba";
+    /** 签到广播权限：signature 级，只有模块自身（同签名）能发送。 */
+    public static final String SIGN_PERMISSION =
+            "io.github.yigenhuobah.tiebaquiet.permission.SIGN";
 
     private static final String TAG = Feature.TAG;
     private static final int REGISTER_ATTEMPTS = 30;
@@ -73,8 +76,10 @@ public final class SignInFeature {
                     Context ctx = Phase2Features.HostApp.context();
                     if (ctx != null) {
                         try {
+                            // 6 参版本要求发送方持有 SIGN_PERMISSION；模块 App 在
+                            // manifest 中声明并 uses 该 signature 权限，其他应用无法伪造广播。
                             ContextCompat.registerReceiver(ctx, receiver, filter,
-                                    ContextCompat.RECEIVER_EXPORTED);
+                                    SIGN_PERMISSION, null, ContextCompat.RECEIVER_EXPORTED);
                             env.module.log(Log.INFO, TAG,
                                     "sign receiver registered (attempt " + (attempt + 1) + ")");
                             return;

@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- 一键签到广播只允许同签名应用发送；模块自身声明并持有该权限。 -->
+    <permission
+        android:name="${applicationId}.permission.SIGN"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="${applicationId}.permission.SIGN" />
+
     <queries>
         <package android:name="com.baidu.tieba" />
     </queries>
