@@ -25,7 +25,9 @@ import io.github.yigenhuobah.tiebaquiet.StatusProvider;
  * 拿不到就等下一轮刷新。
  *
  * <p>节流：后台单线程每 3 秒把 HookState 快照打平上报一次，内容没变不发；
- * provider 不可达时退避 60 秒，不刷日志。只在主进程启动（由入口类保证）。
+ * 但同一快照至少每 {@link #HEARTBEAT_MS} 重发一次，避免 provider 写失败或目标进程
+ * 被杀后快照永久停在上一次“以为成功”的状态。provider 不可达或提交失败时退避 60 秒，
+ * 不刷日志。只在主进程启动（由入口类保证）。
  */
 public final class Report {
 
@@ -34,9 +36,13 @@ public final class Report {
     private static final long PERIOD_SECONDS = 3L;
     private static final long BACKOFF_MS = 60_000L;
 
+    /** 内容未变化时的重发间隔（心跳）：5 分钟。 */
+    static final long HEARTBEAT_MS = 5 * 60 * 1000L;
+
     private static volatile boolean sStarted;
     private static volatile Context sContext;
     private static volatile Map<String, String> sLast = new TreeMap<>();
+    private static volatile long sLastSentAt;
     private static volatile long sNextTry;
     private static volatile int sErrors;
 
@@ -68,12 +74,33 @@ public final class Report {
         }, INITIAL_DELAY_SECONDS, PERIOD_SECONDS, TimeUnit.SECONDS);
     }
 
+    /**
+     * 是否需要回传当前快照。纯函数，便于 JVM 单测（见 ReportTest）。
+     *
+     * <p>规则：空快照不发；内容与上次成功回传不同立即发；内容相同则仅在距上次成功
+     * 回传达到 {@link #HEARTBEAT_MS} 时重发（心跳）；从未成功回传过（lastSentAt &lt;= 0）
+     * 也要发。失败的回传不会更新 last/lastSentAt，因此下一轮仍会命中重发条件。
+     */
+    static boolean shouldSend(Map<String, String> batch, Map<String, String> last,
+                              long now, long lastSentAt) {
+        if (batch == null || batch.isEmpty()) {
+            return false;
+        }
+        if (last == null || !batch.equals(last)) {
+            return true;
+        }
+        if (lastSentAt <= 0) {
+            return true;
+        }
+        return now - lastSentAt >= HEARTBEAT_MS;
+    }
+
     private static void flush() {
         Map<String, String> batch = HookState.snapshot();
-        if (batch.isEmpty() || batch.equals(sLast)) {
+        long now = System.currentTimeMillis();
+        if (!shouldSend(batch, sLast, now, sLastSentAt)) {
             return;
         }
-        long now = System.currentTimeMillis();
         if (now < sNextTry) {
             return;
         }
@@ -94,10 +121,12 @@ public final class Report {
                     Uri.parse("content://" + StatusProvider.AUTHORITY),
                     "report", null, extras);
             if (result != null) {
+                // provider 已同步 commit 成功：此时才把快照记为已发送并刷新心跳时间。
                 sLast = batch;
+                sLastSentAt = System.currentTimeMillis();
                 return;
             }
-            // call() 返回 null 视为 provider 暂不可达：退避 60 秒，不更新 sLast。
+            // call() 返回 null 视为 provider 暂不可达或落盘失败：退避 60 秒，不更新 sLast。
             sNextTry = System.currentTimeMillis() + BACKOFF_MS;
             if (sErrors++ < 3) {
                 Log.w(TAG, "report provider returned null");

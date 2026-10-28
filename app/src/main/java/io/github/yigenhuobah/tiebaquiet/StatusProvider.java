@@ -1,5 +1,6 @@
 package io.github.yigenhuobah.tiebaquiet;
 
+import android.annotation.SuppressLint;
 import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.content.Context;
@@ -8,6 +9,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Bundle;
+import android.util.Log;
 
 /**
  * 目标进程（百度贴吧）→ 模块 App 的诊断状态通道。
@@ -20,6 +22,8 @@ import android.os.Bundle;
  * value 有长度上限。不存任何用户内容、账号、设备标识或业务数据。
  */
 public final class StatusProvider extends ContentProvider {
+
+    private static final String TAG = "TiebaQuiet";
 
     /** 与 manifest 的 ${applicationId}.status 一致，发布后不可改。 */
     public static final String AUTHORITY = "io.github.yigenhuobah.tiebaquiet.status";
@@ -43,7 +47,12 @@ public final class StatusProvider extends ContentProvider {
     /**
      * synchronized：目标进程可能并发回传，hit 的 getLong→compare→putLong 必须串行，
      * 否则较大计数会被较小值覆盖。
+     *
+     * <p>写入用 {@code commit()} 同步落盘并检查返回值：call() 运行在 provider 的 binder
+     * 线程，不阻塞主线程；只有提交成功才返回非 null（ok）。提交失败记录 warning 并返回
+     * null，与“provider 不可达”保持同一失败语义，由 Report 侧退避重试，避免回传假成功。
      */
+    @SuppressLint("ApplySharedPref") // binder 线程同步落盘，必须拿到真实写入结果。
     @Override
     public synchronized Bundle call(String method, String arg, Bundle extras) {
         Context context = getContext();
@@ -92,7 +101,16 @@ public final class StatusProvider extends ContentProvider {
             accepted++;
         }
         if (accepted > 0) {
-            editor.apply();
+            boolean committed;
+            try {
+                committed = editor.commit();
+            } catch (Throwable t) {
+                committed = false;
+            }
+            if (!committed) {
+                Log.w(TAG, "report commit failed, accepted=" + accepted);
+                return null;
+            }
         }
         return new Bundle();
     }
