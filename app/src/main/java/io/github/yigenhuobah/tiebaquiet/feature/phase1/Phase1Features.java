@@ -10,7 +10,6 @@ import android.webkit.WebView;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import io.github.libxposed.api.XposedInterface;
@@ -205,9 +204,8 @@ public final class Phase1Features {
                             if (filtered != null && filtered != original) {
                                 out[0] = filtered;
                             }
-                            // 直播卡由多个组件拼成，数据层删不干净，视图层再整卡隐藏。
-                            FeedCardSweeper.schedule(env, adapter,
-                                    Arrays.asList("分钟前开播", "直播中", "正在直播"));
+                            // 直播卡由多个组件拼成，数据层删不干净，视图层再按卡片数据整卡隐藏。
+                            FeedCardSweeper.schedule(env, adapter, true, false);
                             return chain.proceed(out);
                         }
                     });
@@ -293,8 +291,8 @@ public final class Phase1Features {
         return f.hook(env, method, "template_set_list", new XposedInterface.Hooker() {
             @Override
             public Object intercept(XposedInterface.Chain chain) throws Throwable {
-                FeedCardSweeper.schedule(env, chain.getThisObject(),
-                        Arrays.asList("实时热点"));
+                // 与直播卡共用一条按 adapter 去重的 sweep 链，只合并热点策略。
+                FeedCardSweeper.schedule(env, chain.getThisObject(), false, true);
                 return chain.proceed();
             }
         });

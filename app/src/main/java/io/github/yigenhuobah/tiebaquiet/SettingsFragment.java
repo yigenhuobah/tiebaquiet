@@ -224,6 +224,9 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         }
         final Activity host = requireActivity();
         final Context appContext = requireContext().getApplicationContext();
+        // 已知语义不一致（本轮不改，等待产品决策）：点击按钮时无条件把 one_key_sign
+        // 写成 true，而设置页的 EN-08 开关可以关闭它；关闭开关并不会阻止本按钮触发签到。
+        // 目标进程的接收器也按“显式广播即用户操作”处理，不读取该开关快照。
         if (!store.put(SignInFeature.KEY, true, (key, success) -> {
             if (!isAdded() || getActivity() != host) {
                 return;
@@ -262,6 +265,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 try {
                     appContext.startActivity(intent);
                 } catch (Throwable t) {
+                    // 贴吧被禁用/冻结或 launch intent 被系统拒绝时，设置页不能跟着崩。
                     Log.w(TAG, "launch failed", t);
                     Toast.makeText(requireContext(), R.string.action_launch_failed,
                             Toast.LENGTH_SHORT).show();
