@@ -212,8 +212,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     }
 
     /**
-     * 一键签到：先异步写 one_key_sign，commit 成功后再拉起贴吧，
-     * 1.2 秒后发显式广播。PackageManager 查询也放后台，主线程只负责启动 Activity。
+     * 一键签到：EN-08 开关关闭时提示先开启；开启时直接拉起贴吧并在 1.2 秒后发显式广播。
+     * 不再静默把开关写成 true，也不再因为按钮点击而改变用户配置。
      */
     private void triggerSignIn() {
         final ConfigStore store = mStore;
@@ -222,25 +222,13 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                     Toast.LENGTH_SHORT).show();
             return;
         }
-        final Activity host = requireActivity();
-        final Context appContext = requireContext().getApplicationContext();
-        // 已知语义不一致（本轮不改，等待产品决策）：点击按钮时无条件把 one_key_sign
-        // 写成 true，而设置页的 EN-08 开关可以关闭它；关闭开关并不会阻止本按钮触发签到。
-        // 目标进程的接收器也按“显式广播即用户操作”处理，不读取该开关快照。
-        if (!store.put(SignInFeature.KEY, true, (key, success) -> {
-            if (!isAdded() || getActivity() != host) {
-                return;
-            }
-            if (!success) {
-                Toast.makeText(requireContext(), R.string.action_write_failed,
-                        Toast.LENGTH_SHORT).show();
-                return;
-            }
-            launchTargetAndBroadcast(host, appContext);
-        })) {
-            Toast.makeText(requireContext(), R.string.action_write_failed,
+        if (!store.get(SignInFeature.KEY, false)) {
+            Toast.makeText(requireContext(), R.string.action_sign_in_disabled,
                     Toast.LENGTH_SHORT).show();
+            return;
         }
+        launchTargetAndBroadcast(requireActivity(),
+                requireContext().getApplicationContext());
     }
 
     private void launchTargetAndBroadcast(final Activity host, final Context appContext) {

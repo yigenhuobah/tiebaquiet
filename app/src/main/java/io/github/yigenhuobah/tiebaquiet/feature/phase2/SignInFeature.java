@@ -17,8 +17,8 @@ import io.github.yigenhuobah.tiebaquiet.HookEnv;
 /**
  * 一键签到：模块 App 发送显式广播，目标进程内的接收器拉起贴吧自带签到页。
  *
- * <p>接收器无论开关状态都注册（{@link #installAlways(HookEnv)}），是否真正触发
- * 由设置页按钮决定；{@link #install(HookEnv)} 只做锚点存在性检查。
+ * <p>接收器常驻注册（{@link #installAlways(HookEnv)}），但触发时读取 EN-08
+ * {@code one_key_sign} 开关：关闭时忽略广播，不再把“显式广播”当成无条件用户操作。
  */
 public final class SignInFeature {
 
@@ -49,8 +49,8 @@ public final class SignInFeature {
     }
 
     /**
-     * 无论开关状态都注册命令接收器：设置页按钮发显式广播，
-     * 贴吧进程内的接收器在触发时再判断开关。
+     * 无论开关状态都注册命令接收器：设置页按钮发显式广播，接收器在触发时
+     * 读取 EN-08 开关，关闭则忽略。
      */
     public static boolean installAlways(final HookEnv env) {
         if (env.anchors.method("sign_all_load") == null) {
@@ -62,7 +62,11 @@ public final class SignInFeature {
                 if (intent == null || !ACTION_SIGN.equals(intent.getAction())) {
                     return;
                 }
-                // 显式广播本身就是用户操作，不再依赖 hook 侧的开关快照。
+                Feature feature = FeatureRegistry.byKey(KEY);
+                if (feature == null || !feature.isEnabled(env)) {
+                    env.module.log(Log.INFO, TAG, "sign request ignored (switch off)");
+                    return;
+                }
                 env.module.log(Log.INFO, TAG, "sign request received");
                 triggerSign(env);
             }

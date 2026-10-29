@@ -135,6 +135,7 @@
     <!-- 动作与提示 -->
     <string name="action_sign_in">一键签到</string>
     <string name="action_sign_in_summary">触发贴吧自带的全部吧签到，需已登录贴吧</string>
+    <string name="action_sign_in_disabled">请先开启「一键签到」开关</string>
     <string name="action_launch_failed">无法拉起百度贴吧，请确认已安装</string>
     <string name="action_write_failed">写入失败：开关未保存。请确认框架已连接</string>
     <string name="action_open_failed">无法打开链接，请检查浏览器</string>
