@@ -68,11 +68,19 @@ public class TiebaQuietModule extends XposedModule {
             if (!feature.isEnabled(env)) {
                 continue;
             }
+            // 先创建空 State：即使安装阶段一个锚点都没找到，也会进入快照并回传空 reg/skip。
+            HookState.enable(feature);
             boolean result;
             try {
                 result = feature.install(env);
             } catch (Throwable t) {
                 log(Log.WARN, TAG, "feature " + feature.code + " crashed", t);
+                result = false;
+            }
+            // 零成功安装锚点且存在 skip：该功能整体不可用，升级为 critical。
+            // 部分锚点缺失时 installedCount > 0，保持普通 skip 只作诊断。
+            if (HookState.installedCount(feature) == 0 && HookState.skipReason(feature) != null) {
+                HookState.markNotFoundCritical(feature, "无可用锚点");
                 result = false;
             }
             if (result) {

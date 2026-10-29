@@ -12,11 +12,11 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 目标进程内的诊断状态：每个功能的注册标签、命中次数、跳过原因。
+ * 目标进程内的诊断状态：每个功能的注册标签、命中次数、跳过原因与主锚点缺失标记。
  *
  * <p>命中可能来自任意线程（含 binder 线程），全部使用并发容器。
  * 快照由 {@link io.github.yigenhuobah.tiebaquiet.hooks.Report} 定期回传，
- * 键使用 {@code reg./hit./skip.} 前缀，值截断到 256 字符。
+ * 键使用 {@code reg./hit./skip./crit.} 前缀，值截断到 256 字符。
  */
 public final class HookState {
 
@@ -29,6 +29,7 @@ public final class HookState {
 
     private static final class State {
         final Set<String> labels = ConcurrentHashMap.newKeySet();
+        final Set<String> criticalSkips = ConcurrentHashMap.newKeySet();
         final AtomicLong hits = new AtomicLong();
         volatile String skip;
 
@@ -49,12 +50,47 @@ public final class HookState {
         return s;
     }
 
+    /**
+     * 功能开始安装。创建空 State，确保“已启用但安装阶段完全没有 touch”的功能
+     * 也会进入快照并发送空 reg/skip，从而清掉上一会话的旧 skip。
+     */
+    public static void enable(Feature feature) {
+        state(feature);
+    }
+
     public static void installed(Feature feature, String label) {
         state(feature).labels.add(label);
     }
 
+    /**
+     * 普通锚点缺失：只记录 skip 供诊断页展示，不计入失败横幅。
+     */
     public static void markNotFound(Feature feature, String reason) {
         state(feature).markSkip(reason);
+    }
+
+    /**
+     * 主锚点缺失（该功能零成功安装锚点）：除记录 skip 外再打 critical 标记，
+     * 让 {@link ReportProtocol#featureFailed} 把该功能计入失败横幅。
+     */
+    public static void markNotFoundCritical(Feature feature, String reason) {
+        State s = state(feature);
+        s.markSkip(reason);
+        if (reason != null) {
+            s.criticalSkips.add(reason);
+        }
+    }
+
+    /** 本会话是否出现过主锚点缺失。 */
+    public static boolean hasCriticalSkip(Feature feature) {
+        State s = STATES.get(feature);
+        return s != null && !s.criticalSkips.isEmpty();
+    }
+
+    /** 当前会话成功安装的锚点数量（每个 installed 标签算一个）。 */
+    public static int installedCount(Feature feature) {
+        State s = STATES.get(feature);
+        return s == null ? 0 : s.labels.size();
     }
 
     /** 命中计数 +1，返回累加后的次数（供日志采样）。 */

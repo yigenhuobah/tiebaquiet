@@ -1,6 +1,7 @@
 package io.github.yigenhuobah.tiebaquiet;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -38,6 +39,30 @@ public class HookStateTest {
         HookState.markNotFound(f, "first");
         HookState.markNotFound(f, "second");
         assertEquals("second", HookState.skipReason(f));
+        assertFalse("普通 skip 不能标 critical", HookState.hasCriticalSkip(f));
+    }
+
+    @Test
+    public void markNotFoundCriticalSetsSkipAndCriticalFlag() {
+        Feature f = FeatureRegistry.byKey("host_only");
+        HookState.markNotFoundCritical(f, "无可用锚点");
+        assertEquals("无可用锚点", HookState.skipReason(f));
+        assertTrue("零成功安装锚点必须标 critical", HookState.hasCriticalSkip(f));
+    }
+
+    @Test
+    public void criticalFlagSurvivesLaterOptionalSkip() {
+        Feature f = FeatureRegistry.byKey("reverse_order");
+        HookState.markNotFoundCritical(f, "无可用锚点");
+        HookState.markNotFound(f, "部分锚点缺失");
+        assertEquals("诊断页展示最后一个原因", "部分锚点缺失", HookState.skipReason(f));
+        assertTrue("后续可选 skip 不能清掉 critical 标记", HookState.hasCriticalSkip(f));
+    }
+
+    @Test
+    public void untouchedFeatureHasNoCriticalSkip() {
+        Feature f = FeatureRegistry.byKey("no_watermark");
+        assertFalse(HookState.hasCriticalSkip(f));
     }
 
     @Test
@@ -46,6 +71,29 @@ public class HookStateTest {
         assertEquals(0L, HookState.hitCount(f));
         assertTrue("未触碰的 Feature 不应有标签", HookState.labels(f).isEmpty());
         assertNull("未触碰的 Feature 不应有 skip 原因", HookState.skipReason(f));
+        assertEquals(0, HookState.installedCount(f));
+    }
+
+    @Test
+    public void enableCreatesEmptyStateForUntouchedFeature() {
+        Feature f = FeatureRegistry.byKey("force_night");
+        HookState.enable(f);
+        assertTrue("enable 后 Feature 必须进入 touched，才能回传空 reg/skip",
+                HookState.touched().contains(f));
+        assertTrue(HookState.labels(f).isEmpty());
+        assertNull(HookState.skipReason(f));
+        assertEquals(0L, HookState.hitCount(f));
+        assertEquals(0, HookState.installedCount(f));
+        assertFalse(HookState.hasCriticalSkip(f));
+    }
+
+    @Test
+    public void installedCountTracksSuccessfulAnchors() {
+        Feature f = FeatureRegistry.byKey("float_ad");
+        assertEquals(0, HookState.installedCount(f));
+        HookState.installed(f, "home_ad_float");
+        HookState.installed(f, "pb_ad_float");
+        assertEquals("每个成功安装标签都算一个锚点", 2, HookState.installedCount(f));
     }
 
     @Test
