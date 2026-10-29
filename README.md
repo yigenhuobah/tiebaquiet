@@ -6,6 +6,7 @@
 - 目标版本：百度贴吧 **22.12.1.0**（versionCode 369885440）
 - 包名：`io.github.yigenhuobah.tiebaquiet`
 - 运行环境：LSPosed 2.1+ / Vector 2.2+（Zygisk），API 102
+- 仓库：<https://github.com/yigenhuobah/tiebaquiet> ｜ 反馈：[Issues](https://github.com/yigenhuobah/tiebaquiet/issues/new/choose)
 
 ## 功能
 
