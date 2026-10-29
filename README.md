@@ -2,6 +2,7 @@
 
 基于 [libxposed API 102](https://repo.maven.apache.org/maven2/io/github/libxposed/) 的 LSPosed 模块，为百度贴吧（`com.baidu.tieba`）提供去广告、界面精简、功能增强与隐私保护。
 
+- 模块版本：**0.2.1**（versionCode 3）
 - 目标版本：百度贴吧 **22.12.1.0**（versionCode 369885440）
 - 包名：`io.github.yigenhuobah.tiebaquiet`
 - 运行环境：LSPosed 2.1+ / Vector 2.2+（Zygisk），API 102
@@ -93,8 +94,10 @@
 完整验证：
 
 ```bash
-./gradlew clean test assembleDebug assembleRelease
+./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleRelease --no-daemon
 ```
+
+当前共 **107 个 JVM 单测**（`app/src/test`），CI 在 push 到 main 和 PR 时运行单测与 lint。
 
 ## 架构
 
@@ -102,11 +105,11 @@
 
 - `TiebaQuietModule`：libxposed 入口，仅注入贴吧主进程；安装完成后启动诊断回传。
 - `Feature` / `FeatureRegistry`：24 个功能的编号、remote key、文案、默认值、分组与安装器。
-- `anchor/AnchorTable`：读取打包进 APK 的 `anchors.json`，运行时反射校验类/方法是否存在；缺失时只禁用对应功能。
+- `anchor/AnchorTable`：读取打包进 APK 的 `anchors.json`（当前 54 个方法锚点 + 7 个类锚点），运行时反射校验类/方法是否存在；缺失时只禁用对应功能，版本不匹配只告警不阻断。
 - `feature/phase1|2|3`：各功能的 hook 安装器；`CardFilter` / `FeedCardSweeper` 为信息流过滤公共逻辑。
 - `Config` / `ConfigStore` / `ConfigMigration`：目标进程读、模块 App 写，新分组 `config` 优先、旧分组 `features` 兜底。
 - `ServiceBridge`：XposedService 绑定、占位 binder 过滤与 remote prefs 获取。
-- `HookState` / `hooks/Report` / `StatusProvider`：目标进程每 3 秒回传注册/命中/跳过状态，模块 App 侧校验 UID 后落盘供诊断页读取。
+- `HookState` / `hooks/Report` / `StatusProvider`：目标进程每 3 秒检查注册/命中/跳过状态，内容变化才回传、不变时每 5 分钟心跳；模块 App 侧校验 UID 后同步 `commit()` 落盘，并按会话标识、10 分钟 TTL 与 critical 标记供诊断页和失败横幅读取。
 - `tools/gen_anchors.py`：构建期用 [DexSQL](https://github.com/LSPosed/dexsql-release) 校验全部锚点并生成 `anchors.json`。
 
 贴吧更新后：
@@ -124,6 +127,12 @@ python tools/gen_anchors.py --apk <新版本apk> --out app/src/main/resources/an
 - 已知暴露面：贴吧内置 sofire/weapon 等检测会随请求上报 Xposed 环境特征；本模块不做任何检测绕过，只减少主动触碰（不 hook 框架方法、不碰签名/发送层、不做设备号伪造）。
 - “启动任务精简”曾 hook `LaunchTask.run()`，但它是所有启动任务的模板方法，跳过会导致 Fresco 图片管线未初始化、贴吧启动即闪退，已移除。
 - 修改开关后需要强制停止并重新打开贴吧生效（RemotePreferences 在进程启动时读取）。
+
+### 已知限制（0.2.1）
+
+- **一键签到开关语义未改**：点击设置页“一键签到”按钮时无条件把 `one_key_sign` 写成 `true`，即使 EN-08 开关处于关闭状态也会触发；目标进程接收器按“显式广播即用户操作”处理，不读取该开关快照。此语义留待后续版本决策。
+- **正向签到未真机触发**：本轮只在 JVM 单测与构建层面验证，未在真机上实际完成一次签到流程。
+- **24 项逐项回归未做**：本轮未对 24 个功能逐项在真机做开启/关闭回归，仅完成单测、lint 与 release 构建验证。
 
 ## 许可证
 

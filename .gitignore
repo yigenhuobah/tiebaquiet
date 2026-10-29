@@ -13,3 +13,6 @@ captures/
 *.aab
 *.keystore
 *.jks
+
+# 发布说明/本地产物
+dist/
