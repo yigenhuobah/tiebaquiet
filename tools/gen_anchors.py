@@ -89,6 +89,7 @@ ANCHORS = {
     "original_button": ("com.baidu.tbadk.coreExtra.view.UrlDragImageView", "W", "()Z"),
     "video_set_path": ("com.baidu.tieba.play.TbVideoView", "setVideoPath", "(Ljava/lang/String;Ljava/lang/String;)V"),
     "sign_all_load": ("com.baidu.tieba.signall.SignAllForumModel", "loadData", "()Z"),
+    "retail_store_page": ("com.baidu.tbadk.abtest.UbsABTestHelper", "retailStorePage", "()Z"),
 
     # ---------- phase 3 ----------
     "clipboard": ("com.baidu.tbadk.core.util.UtilHelper", "getClipBoardContent", "()Ljava/lang/String;"),

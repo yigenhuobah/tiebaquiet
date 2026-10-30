@@ -25,7 +25,7 @@ public class ReportProtocolTest {
     }
 
     @Test
-    public void validKeyAcceptsAll98GeneratedKeys() {
+    public void validKeyAcceptsAllGeneratedKeys() {
         int count = 0;
         for (Feature f : FeatureRegistry.all()) {
             assertTrue(ReportProtocol.validKey(ReportProtocol.PREFIX_REG + f.key));
@@ -35,7 +35,7 @@ public class ReportProtocolTest {
             count += 4;
         }
         count += 2; // meta.session / meta.updated_at
-        assertEquals(98, count);
+        assertEquals(102, count);
     }
 
     @Test

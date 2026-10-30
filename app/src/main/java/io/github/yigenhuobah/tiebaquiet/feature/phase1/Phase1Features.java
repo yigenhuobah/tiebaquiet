@@ -298,6 +298,13 @@ public final class Phase1Features {
         });
     }
 
+    /** 底栏小卖部：强制走“发布入口迁移”形态，隐藏小卖部 Tab 并恢复底栏发布按钮。 */
+    public static boolean installHideStoreTab(HookEnv env) {
+        Feature f = FeatureRegistry.byKey("hide_store_tab");
+        Method method = env.anchors.method("retail_store_page");
+        return f.replace(env, method, "retail_store_page", Boolean.FALSE);
+    }
+
     /** 个人中心精简：H5 “我的”页注入 CSS/JS 隐藏会员横幅、钱包、任务与游戏专区。 */
     public static boolean installProfileCleanup(HookEnv env) {
         final Feature f = FeatureRegistry.byKey("profile_cleanup");

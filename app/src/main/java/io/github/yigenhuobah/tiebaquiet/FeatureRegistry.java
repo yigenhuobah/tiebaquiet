@@ -11,7 +11,7 @@ import io.github.yigenhuobah.tiebaquiet.feature.phase2.Phase2Features;
 import io.github.yigenhuobah.tiebaquiet.feature.phase3.Phase3Features;
 
 /**
- * 24 个功能的唯一清单：编号、remote key、文案、默认值、分组与安装器。
+ * 25 个功能的唯一清单：编号、remote key、文案、默认值、分组与安装器。
  *
  * <p>顺序固定 AD → UI → PV → EN（没有 EX 功能），设置页与诊断页都按这个顺序渲染。
  * 安装器指向各 phase 类的静态方法；模块 App 只读取元数据，不执行安装。
@@ -108,7 +108,7 @@ public final class FeatureRegistry {
                     }
                 }));
 
-        // UI 界面精简（3 项，默认开）
+        // UI 界面精简（4 项，默认开）
         all.add(new Feature("UI-01", "tab_red_dot", R.string.f_tab_red_dot_title,
                 R.string.f_tab_red_dot_summary, true, Feature.Group.UI,
                 new Feature.Installer() {
@@ -131,6 +131,14 @@ public final class FeatureRegistry {
                     @Override
                     public boolean install(HookEnv env) {
                         return Phase1Features.installProfileCleanup(env);
+                    }
+                }));
+        all.add(new Feature("UI-04", "hide_store_tab", R.string.f_hide_store_tab_title,
+                R.string.f_hide_store_tab_summary, true, Feature.Group.UI,
+                new Feature.Installer() {
+                    @Override
+                    public boolean install(HookEnv env) {
+                        return Phase1Features.installHideStoreTab(env);
                     }
                 }));
 

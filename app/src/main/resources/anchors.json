@@ -272,6 +272,11 @@
       "c": "com.baidu.tieba.personTab.controller.PersonTabWebController",
       "m": "z",
       "s": "(Landroid/view/View;Landroid/os/Bundle;)V"
+    },
+    "retail_store_page": {
+      "c": "com.baidu.tbadk.abtest.UbsABTestHelper",
+      "m": "retailStorePage",
+      "s": "()Z"
     }
   },
   "classes": {

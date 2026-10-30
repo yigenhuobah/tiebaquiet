@@ -81,6 +81,10 @@
             android:icon="@drawable/ic_group_ui"
             android:key="profile_cleanup" />
 
+        <io.github.yigenhuobah.tiebaquiet.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_ui"
+            android:key="hide_store_tab" />
+
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/group_pv">

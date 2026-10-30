@@ -29,7 +29,7 @@ public final class ReportProtocol {
     /** 超过 10 分钟没有新回传就视为过期，失败计数按“未知”处理（0）。 */
     public static final long DEFAULT_TTL_MS = 10 * 60 * 1000L;
 
-    /** 24 个 Feature × 4 个前缀 = 96 个功能键，加 2 个 meta 键共 98 个，构建后不可变。 */
+    /** 25 个 Feature × 4 个前缀 = 100 个功能键，加 2 个 meta 键共 102 个，构建后不可变。 */
     private static final Set<String> ALLOWED_KEYS = buildAllowedKeys();
 
     private ReportProtocol() {

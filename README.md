@@ -2,7 +2,7 @@
 
 基于 [libxposed API 102](https://repo.maven.apache.org/maven2/io/github/libxposed/) 的 LSPosed 模块，为百度贴吧（`com.baidu.tieba`）提供去广告、界面精简、功能增强与隐私保护。
 
-- 模块版本：**0.2.1**（versionCode 3）
+- 模块版本：**0.3.0**（versionCode 4）
 - 目标版本：百度贴吧 **22.12.1.0**（versionCode 369885440）
 - 包名：`io.github.yigenhuobah.tiebaquiet`
 - 运行环境：LSPosed 2.1+ / Vector 2.2+（Zygisk），API 102
@@ -34,6 +34,7 @@
 | UI-01 | 底部 Tab 红点 | 隐藏底部导航的红点与角标 |
 | UI-02 | 更新弹窗 | 拦截“发现新版本”强制更新弹窗 |
 | UI-03 | 个人中心精简 | 隐藏“我的”页的会员横幅、钱包、任务赚贴贝与游戏专区 |
+| UI-04 | 底栏小卖部 | 隐藏底部“小卖部”Tab，并恢复原底栏发布按钮 |
 
 ### PV 隐私保护（默认关）
 
@@ -105,7 +106,7 @@
 全部为 Java 17 + XML + Material 3，不使用 Kotlin/Compose。
 
 - `TiebaQuietModule`：libxposed 入口，仅注入贴吧主进程；安装完成后启动诊断回传。
-- `Feature` / `FeatureRegistry`：24 个功能的编号、remote key、文案、默认值、分组与安装器。
+- `Feature` / `FeatureRegistry`：25 个功能的编号、remote key、文案、默认值、分组与安装器。
 - `anchor/AnchorTable`：读取打包进 APK 的 `anchors.json`（当前 54 个方法锚点 + 7 个类锚点），运行时反射校验类/方法是否存在；缺失时只禁用对应功能，版本不匹配只告警不阻断。
 - `feature/phase1|2|3`：各功能的 hook 安装器；`CardFilter` / `FeedCardSweeper` 为信息流过滤公共逻辑。
 - `Config` / `ConfigStore` / `ConfigMigration`：目标进程读、模块 App 写，新分组 `config` 优先、旧分组 `features` 兜底。
@@ -129,12 +130,14 @@ python tools/gen_anchors.py --apk <新版本apk> --out app/src/main/resources/an
 - “启动任务精简”曾 hook `LaunchTask.run()`，但它是所有启动任务的模板方法，跳过会导致 Fresco 图片管线未初始化、贴吧启动即闪退，已移除。
 - 修改开关后需要强制停止并重新打开贴吧生效（RemotePreferences 在进程启动时读取）。
 
-### 已知限制（0.2.1）
+### 已知限制（0.3.0）
+
+- **22.13.1.1 未适配**：2026-10-30 设备自动升级到 22.13.1.1，模块按 best-effort 继续挂载；UI-04 已验证可用，其余功能未逐项复验，正式支持仍为 22.12.1.0。
 
 - **一键签到需 EN-08 开启**：关闭 EN-08 时接收器忽略签到广播，设置页按钮提示“请先开启”；点击按钮不再静默改写开关。
 - **签到页可打开，但本账号无法完成签到**：2026-10-29 真机（0.2.1）已触发并打开贴吧签到页；页面提示「吧内等级 7 级以上才可使用」，当前账号各吧为 1–6 级，因此没有实际完成签到。这是贴吧的账号等级门槛，不是模块失败。
 - **冷启动需系统确认**：贴吧未运行时点按钮，HyperOS 会弹「启动应用」确认框；本次未验证人工点「本次允许」后的完整路径，先手动启动贴吧再触发是正常的。
-- **24 项逐项回归未做**：本轮未对 24 个功能逐项在真机做开启/关闭回归，仅完成单测、lint 与 release 构建验证。
+- **25 项逐项回归未做**：本轮未对 25 个功能逐项在真机做开启/关闭回归，仅完成单测、lint 与 release 构建验证。
 
 ## 许可证
 

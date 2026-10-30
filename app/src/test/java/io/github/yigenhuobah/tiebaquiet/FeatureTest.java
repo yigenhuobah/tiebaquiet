@@ -46,6 +46,7 @@ public class FeatureTest {
         map.put("tab_red_dot", "UI-01");
         map.put("update_dialog", "UI-02");
         map.put("profile_cleanup", "UI-03");
+        map.put("hide_store_tab", "UI-04");
         map.put("clipboard_guard", "PV-01");
         map.put("personalized_ad_off", "PV-02");
         map.put("keep_alive_block", "PV-03");
@@ -61,8 +62,8 @@ public class FeatureTest {
     }
 
     @Test
-    public void twentyFourFeaturesPresent() {
-        assertEquals("Feature 数量必须是 24", 24, FeatureRegistry.all().size());
+    public void featureCountMatchesSpec() {
+        assertEquals("Feature 数量必须是 25", 25, FeatureRegistry.all().size());
     }
 
     @Test
@@ -117,7 +118,7 @@ public class FeatureTest {
             counts.put(f.group, old == null ? 1 : old + 1);
         }
         assertEquals("AD 分组必须是 10 项", Integer.valueOf(10), counts.get(Feature.Group.AD));
-        assertEquals("UI 分组必须是 3 项", Integer.valueOf(3), counts.get(Feature.Group.UI));
+        assertEquals("UI 分组必须是 4 项", Integer.valueOf(4), counts.get(Feature.Group.UI));
         assertEquals("PV 分组必须是 3 项", Integer.valueOf(3), counts.get(Feature.Group.PV));
         assertEquals("EN 分组必须是 8 项", Integer.valueOf(8), counts.get(Feature.Group.EN));
         assertFalse("TiebaQuiet 没有 EX 分组", counts.containsKey(Feature.Group.EX));

@@ -82,6 +82,8 @@
     <string name="f_update_dialog_summary">拦截“发现新版本”强制更新弹窗</string>
     <string name="f_profile_cleanup_title">个人中心精简</string>
     <string name="f_profile_cleanup_summary">隐藏“我的”页的会员横幅、钱包、任务赚贴贝与游戏专区</string>
+    <string name="f_hide_store_tab_title">底栏小卖部</string>
+    <string name="f_hide_store_tab_summary">隐藏底部“小卖部”Tab，并恢复原底栏发布按钮</string>
 
     <!-- 功能：EN 功能增强 -->
     <string name="f_default_channel_title">频道栏默认关注</string>
