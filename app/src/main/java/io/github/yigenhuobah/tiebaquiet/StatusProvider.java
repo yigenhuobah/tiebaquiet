@@ -26,8 +26,9 @@ import java.util.Set;
  * 调用方 UID 必须属于 {@code com.baidu.tieba}；key 只接受 {@link ReportProtocol} 白名单，
  * value 有长度上限。不存任何用户内容、账号、设备标识或业务数据。
  *
- * <p>会话语义：新会话首次写入前清掉上一会话的 reg/hit/skip/crit；迟到的旧会话整批丢弃，
- * 不能覆盖新会话。超过 {@link ReportProtocol#DEFAULT_TTL_MS} 没有新回传的数据视为过期，
+ * <p>会话语义（身份比较）：会话标识不同即新会话，首次写入前清掉上一会话的
+ * reg/hit/skip/crit；没有会话标识的旧版回传整批丢弃，不能覆盖新会话。
+ * 超过 {@link ReportProtocol#DEFAULT_TTL_MS} 没有新回传的数据视为过期，
  * 失败计数按 0（未知）处理，避免旧会话长期误报横幅。
  */
 public final class StatusProvider extends ContentProvider {
@@ -88,7 +89,7 @@ public final class StatusProvider extends ContentProvider {
         }
         SharedPreferences sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
 
-        // 先看本批携带的会话标识：迟到的旧会话整批丢弃；新会话先清掉旧数据。
+        // 先看本批携带的会话标识：无会话标识的旧版回传整批丢弃；会话身份不同先清掉旧数据。
         String incomingSession = null;
         for (int i = 0; i < keys.length; i++) {
             if (ReportProtocol.KEY_META_SESSION.equals(keys[i])
@@ -108,6 +109,32 @@ public final class StatusProvider extends ContentProvider {
             clearFeatureData(sp, editor);
         }
 
+        int accepted = applyEntries(sp, editor, keys, values, newSession);
+        if (accepted > 0) {
+            boolean committed;
+            try {
+                committed = editor.commit();
+            } catch (Throwable t) {
+                committed = false;
+            }
+            if (!committed) {
+                Log.w(TAG, "report commit failed, accepted=" + accepted);
+                return null;
+            }
+        }
+        return new Bundle();
+    }
+
+    /**
+     * {@link #call} 的逐键落盘主体（鉴权/会话判定之外的全部写入逻辑），
+     * 抽成静态方法供 JVM 单测直接驱动——provider 入口依赖 Context/Binder 无法
+     * 在 JVM 调用，但“reg/skip/crit 以最新值覆盖（空串也覆盖）”的落盘语义必须
+     * 由生产代码保证，测试不能再本地复刻（复刻层回归不会被发现）。
+     *
+     * @return 本批接受的键值对数量
+     */
+    static int applyEntries(SharedPreferences sp, SharedPreferences.Editor editor,
+                            String[] keys, String[] values, boolean newSession) {
         int accepted = 0;
         for (int i = 0; i < keys.length; i++) {
             String key = keys[i];
@@ -150,19 +177,7 @@ public final class StatusProvider extends ContentProvider {
             }
             accepted++;
         }
-        if (accepted > 0) {
-            boolean committed;
-            try {
-                committed = editor.commit();
-            } catch (Throwable t) {
-                committed = false;
-            }
-            if (!committed) {
-                Log.w(TAG, "report commit failed, accepted=" + accepted);
-                return null;
-            }
-        }
-        return new Bundle();
+        return accepted;
     }
 
     /** 新会话首次写入前清掉上一会话的逐功能数据；meta 键随后由本批覆盖。 */

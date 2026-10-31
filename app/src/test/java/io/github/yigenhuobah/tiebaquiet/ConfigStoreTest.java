@@ -28,11 +28,17 @@ public class ConfigStoreTest {
 
     @Test
     public void putRejectedWhenNoRemoteGroup() {
+        FakePrefs local = new FakePrefs();
         RecordingCallback callback = new RecordingCallback();
-        ConfigStore store = store(null, null, Runnable::run, Runnable::run);
+        ConfigStore store = new ConfigStore(group -> null, local, null,
+                Runnable::run, Runnable::run);
 
         assertFalse("没有 remote 存储时 remote() 必须为 false", store.remote());
         assertFalse("remote 不可用时 put 必须返回 false", store.put("splash_no_ad", true, callback));
+        assertFalse("拒绝写入时不得写本地暂存假装成功（put 的文档承诺）",
+                local.values.containsKey("splash_no_ad"));
+        assertEquals("拒绝写入时不得触发本地 commit", 0, local.commitCount);
+        assertFalse("本地暂存未被污染，get 必须仍回默认值", store.get("splash_no_ad", false));
         assertTrue("拒绝写入时不应触发回调", callback.results.isEmpty());
     }
 
@@ -151,6 +157,26 @@ public class ConfigStoreTest {
         assertEquals("旧 group 成功时目标进程仍能读到", Collections.singletonList(true),
                 callback.results);
         assertEquals(Boolean.TRUE, features.values.get("splash_no_ad"));
+    }
+
+    @Test
+    public void legacySuccessIsRefusedWhenFailedNewGroupStillHoldsOldValue() {
+        // 生产路径回归锁：新 group 此前已持有该 key（残留旧值），本次新 group
+        // commit 失败、旧 group 成功。读取侧新 key 优先，残留旧值会压过旧 group
+        // 刚写入的新值——目标进程仍读旧值，必须回调 false 让 UI 回滚，
+        // 不能沿用两参“或”合并误报成功。
+        FakePrefs config = new FakePrefs();
+        config.commitResult = false;
+        config.values.put("splash_no_ad", true);
+        FakePrefs features = new FakePrefs();
+        RecordingCallback callback = new RecordingCallback();
+        ConfigStore store = store(config, features, Runnable::run, Runnable::run);
+
+        assertTrue(store.put("splash_no_ad", false, callback));
+        assertEquals("残留旧值遮蔽旧 group 新值时必须报告失败",
+                Collections.singletonList(false), callback.results);
+        assertEquals("旧 group 仍按实际写入落盘", Boolean.FALSE,
+                features.values.get("splash_no_ad"));
     }
 
     @Test

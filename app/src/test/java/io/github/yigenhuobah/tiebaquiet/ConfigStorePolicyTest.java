@@ -29,14 +29,28 @@ public class ConfigStorePolicyTest {
     }
 
     @Test
-    public void anyGroupCommitCountsAsSuccess() {
-        assertTrue("新 group commit 成功即成功",
-                ConfigStorePolicy.committed(true, false));
-        assertTrue("旧 group commit 成功时目标进程也能读到",
-                ConfigStorePolicy.committed(false, true));
-        assertTrue(ConfigStorePolicy.committed(true, true));
-        assertFalse("两个 group 都失败必须报告失败",
-                ConfigStorePolicy.committed(false, false));
+    public void staleNewGroupValueShadowingLegacyWriteIsReportedAsFailure() {
+        assertFalse("新 group 残留旧值会压过刚写进旧 group 的新值，必须报告失败让 UI 回滚",
+                ConfigStorePolicy.committed(false, true, true));
+    }
+
+    @Test
+    public void legacyFallbackCountsWhenNewGroupNeverHeldKey() {
+        assertTrue("新 group 从未持有该 key 时旧 group 成功即目标可读",
+                ConfigStorePolicy.committed(false, true, false));
+    }
+
+    @Test
+    public void newGroupCommitAlwaysWins() {
+        assertTrue(ConfigStorePolicy.committed(true, true, true));
+        assertTrue("新 group 写成功后旧 group 结果不影响目标读取",
+                ConfigStorePolicy.committed(true, false, true));
+    }
+
+    @Test
+    public void bothGroupsFailingIsReportedAsFailure() {
+        assertFalse(ConfigStorePolicy.committed(false, false, true));
+        assertFalse(ConfigStorePolicy.committed(false, false, false));
     }
 
     @Test

@@ -47,19 +47,6 @@ public final class Phase2Features {
                 return null;
             }
         }
-
-        static void toast(final String message) {
-            final Context ctx = context();
-            if (ctx == null) {
-                return;
-            }
-            new Handler(Looper.getMainLooper()).post(new Runnable() {
-                @Override
-                public void run() {
-                    Toast.makeText(ctx, message, Toast.LENGTH_SHORT).show();
-                }
-            });
-        }
     }
 
     /**

@@ -95,7 +95,8 @@ public class ReportTest {
         Map<String, String> first = Report.snapshot();
         String session = first.get(ReportProtocol.KEY_META_SESSION);
         assertNotNull("必须回传 meta.session", session);
-        assertTrue("session 必须是可比较的启动时刻", Long.parseLong(session) > 0L);
+        assertTrue("session 必须是 s<millis>-<8位hex> 格式，带进程随机后缀",
+                session.matches("s\\d+-[0-9a-f]{8}"));
         assertTrue("必须回传 meta.updated_at",
                 Long.parseLong(first.get(ReportProtocol.KEY_META_UPDATED_AT)) > 0L);
         assertEquals("SESSION 常量即进程会话标识", Report.SESSION, session);
@@ -115,6 +116,32 @@ public class ReportTest {
         assertEquals("1", snap.get(ReportProtocol.PREFIX_CRIT + f.key));
         assertEquals("无可用锚点", snap.get(ReportProtocol.PREFIX_SKIP + f.key));
         assertEquals("", snap.get(ReportProtocol.PREFIX_REG + f.key));
+    }
+
+    /**
+     * 安装器抛异常（TiebaQuietModule 的 catch 分支）必须标 critical：
+     * reg 为空 + crit=1 时 featureFailed 为 true，失败横幅不再漏报
+     * “整个功能崩了”，诊断页也不会只剩一个“—”。
+     */
+    @Test
+    public void installerCrashIsVisibleAsCriticalFailure() {
+        Feature f = feature("ad_request_block");
+        HookState.enable(f);
+        // 与 TiebaQuietModule catch 分支一致：markNotFoundCritical(feature, "安装异常 …")。
+        HookState.markNotFoundCritical(f, "安装异常 OutOfMemoryError");
+
+        Map<String, String> snap = Report.snapshot();
+
+        assertEquals("崩溃功能的 reg 仍为空", "", snap.get(ReportProtocol.PREFIX_REG + f.key));
+        assertEquals("安装异常 OutOfMemoryError", snap.get(ReportProtocol.PREFIX_SKIP + f.key));
+        assertEquals("崩溃必须带 critical 标记", "1",
+                snap.get(ReportProtocol.PREFIX_CRIT + f.key));
+        assertTrue("reg 为空也必须计入失败横幅",
+                ReportProtocol.featureFailed(
+                        snap.get(ReportProtocol.PREFIX_REG + f.key),
+                        snap.get(ReportProtocol.PREFIX_SKIP + f.key),
+                        ReportProtocol.isCritical(snap.get(ReportProtocol.PREFIX_CRIT + f.key)),
+                        HookState.hitCount(f)));
     }
 
     @Test
@@ -212,21 +239,25 @@ public class ReportTest {
 
     @Test
     public void providerFailureLeavesBatchPending() {
+        // 心跳到期后重发同一快照：provider 返回 null（不可达 / commit 失败）视为失败，
+        // 调用方必须保持 last / lastSentAt 为上一次成功值，下一轮同一快照仍待发送。
         Map<String, String> snapshot = batch("hit.splash_no_ad", "1");
-        // 上一次成功回传的是另一个快照。
-        Map<String, String> last = batch("reg.splash_no_ad", "splash");
-        long lastSentAt = 1_000_000L;
-        long now = lastSentAt + 1_000L;
+        long lastSuccessAt = 1_000_000L;
+        long failedAt = lastSuccessAt + Report.HEARTBEAT_MS;
 
-        // provider 返回 null（不可达 / commit 失败）：调用方不更新 last/lastSentAt。
-        assertTrue("失败后同一快照必须仍待发送",
-                Report.shouldSend(snapshot, last, now, lastSentAt));
-        assertTrue("下一轮仍需重试",
-                Report.shouldSend(snapshot, last, now + 1L, lastSentAt));
+        assertTrue("心跳到期必须触发本次回传",
+                Report.shouldSend(snapshot, snapshot, failedAt, lastSuccessAt));
 
-        // shouldSend 是纯函数，不得顺带把失败快照写成已发送。
-        assertEquals(batch("reg.splash_no_ad", "splash"), last);
-        assertEquals(1_000_000L, lastSentAt);
+        // 失败路径：sLast / sLastSentAt 不更新（Report.flush 的调用方契约），
+        // 一个发送周期（3 秒）后的下一轮必须再次判定待发送。
+        long nextRound = failedAt + 3_000L;
+        assertTrue("provider 失败后同一快照必须仍待发送",
+                Report.shouldSend(snapshot, snapshot, nextRound, lastSuccessAt));
+
+        // 回归信号：若失败被误当成成功（lastSentAt 被推进到 failedAt），
+        // 心跳窗口未到就不会重发，同一快照会静默卡住整个心跳周期。
+        assertFalse("失败不得推进 lastSentAt，否则重试会被心跳吞掉",
+                Report.shouldSend(snapshot, snapshot, nextRound, failedAt));
     }
 
     @Test

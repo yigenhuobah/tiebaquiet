@@ -277,6 +277,16 @@
       "c": "com.baidu.tieba.personTab.controller.PersonTabWebController",
       "m": "z",
       "s": "(Landroid/view/View;Landroid/os/Bundle;)V"
+    },
+    "person_tab_web_k": {
+      "c": "com.baidu.tieba.personTab.controller.PersonTabWebController",
+      "m": "k",
+      "s": "()Lcom/baidu/tieba/browser/TbWebView;"
+    },
+    "tbwebview_inner": {
+      "c": "com.baidu.tieba.browser.TbWebView",
+      "m": "getInnerWebView",
+      "s": "()Landroid/webkit/WebView;"
     }
   },
   "classes": {

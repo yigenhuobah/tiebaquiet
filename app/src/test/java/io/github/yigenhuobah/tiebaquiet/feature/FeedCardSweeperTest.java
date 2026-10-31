@@ -3,6 +3,7 @@ package io.github.yigenhuobah.tiebaquiet.feature;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
@@ -91,5 +92,56 @@ public class FeedCardSweeperTest {
         assertFalse(FeedCardSweeper.beginSweep(adapter, false, false));
         assertNull(FeedCardSweeper.stateOf(adapter));
         assertFalse(FeedCardSweeper.beginSweep(null, true, true));
+    }
+
+    /**
+     * 链结束后策略必须保留：attach 回调对复用后的目标卡仍按最近一次策略重新隐藏，
+     * 否则被 detach 恢复可见的直播/热点卡要到下一次 setList 才会被再次隐藏。
+     */
+    @Test
+    public void policySurvivesEndSweepForAttachRecheck() {
+        Object adapter = new Object();
+        try {
+            assertTrue(FeedCardSweeper.beginSweep(adapter, true, false));
+            FeedCardSweeper.endSweep(adapter, FeedCardSweeper.stateOf(adapter));
+            assertNull("链已结束", FeedCardSweeper.stateOf(adapter));
+
+            FeedCardSweeper.SweepState policy = FeedCardSweeper.policyOf(adapter);
+            assertNotNull("链结束后策略必须保留，attach 回调才能重新隐藏目标卡", policy);
+            assertTrue(policy.live);
+            assertFalse(policy.hot);
+
+            assertTrue("新一轮 schedule 只合并策略",
+                    FeedCardSweeper.beginSweep(adapter, false, true));
+            policy = FeedCardSweeper.policyOf(adapter);
+            assertTrue("旧策略不得被清掉", policy.live);
+            assertTrue("新策略要合并进来", policy.hot);
+        } finally {
+            FeedCardSweeper.endSweep(adapter, FeedCardSweeper.stateOf(adapter));
+        }
+    }
+
+    @Test
+    public void activeChainStateWinsOverPolicy() {
+        Object adapter = new Object();
+        try {
+            assertTrue(FeedCardSweeper.beginSweep(adapter, true, true));
+            assertSame("链活跃时 attach 回调必须使用链状态",
+                    FeedCardSweeper.stateOf(adapter), FeedCardSweeper.policyOf(adapter));
+        } finally {
+            FeedCardSweeper.endSweep(adapter, FeedCardSweeper.stateOf(adapter));
+        }
+        assertNull(FeedCardSweeper.policyOf(null));
+        assertNull("从未调度的 adapter 没有策略",
+                FeedCardSweeper.policyOf(new Object()));
+    }
+
+    /** 全关策略不产生记录：beginSweep 对 false/false 直接拒绝。 */
+    @Test
+    public void rememberPolicyIgnoresEmptyPolicy() {
+        Object adapter = new Object();
+        FeedCardSweeper.rememberPolicy(adapter, false, false);
+        assertNull(FeedCardSweeper.policyOf(adapter));
+        FeedCardSweeper.rememberPolicy(null, true, true);
     }
 }

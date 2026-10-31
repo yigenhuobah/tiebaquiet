@@ -31,7 +31,7 @@ public final class SignInFeature {
             "io.github.yigenhuobah.tiebaquiet.permission.SIGN";
 
     private static final String TAG = Feature.TAG;
-    private static final int REGISTER_ATTEMPTS = 30;
+    static final int REGISTER_ATTEMPTS = 30;
     private static final long REGISTER_RETRY_MS = 500L;
 
     private SignInFeature() {
@@ -46,6 +46,35 @@ public final class SignInFeature {
             return false;
         }
         return true;
+    }
+
+    /** 单次注册尝试：返回 true 表示注册成功；false/异常都按“本步失败”退避重试。 */
+    interface RegisterAttempt {
+        boolean run() throws Throwable;
+    }
+
+    /**
+     * 注册重试循环：Context 未就绪与注册抛异常一视同仁，退避后重试，
+     * 只在次数用尽后才放弃。抽成静态方法便于 JVM 单测——发送端冷启动只发一次
+     * 广播且无回执，接收器注册一旦永久放弃，签到请求就会被静默丢弃。
+     *
+     * @return 是否注册成功
+     */
+    static boolean registerWithRetry(RegisterAttempt attempt, long delayMs, int maxAttempts)
+            throws InterruptedException {
+        for (int i = 0; i < maxAttempts; i++) {
+            try {
+                if (attempt.run()) {
+                    return true;
+                }
+            } catch (Throwable ignored) {
+                // 单次注册失败不放弃：退避后重试，直到次数用尽。
+            }
+            if (i < maxAttempts - 1) {
+                Thread.sleep(delayMs);
+            }
+        }
+        return false;
     }
 
     /**
@@ -72,35 +101,47 @@ public final class SignInFeature {
             }
         };
         final IntentFilter filter = new IntentFilter(ACTION_SIGN);
-        // onPackageReady 时 Application 可能尚未创建，后台重试拿 Context 再注册。
+        // onPackageReady 时 Application 可能尚未创建，后台重试拿 Context 再注册；
+        // 注册抛异常同样退避重试，不再一次失败就永久放弃。
         Thread thread = new Thread(new Runnable() {
             @Override
             public void run() {
-                for (int attempt = 0; attempt < REGISTER_ATTEMPTS; attempt++) {
-                    Context ctx = Phase2Features.HostApp.context();
-                    if (ctx != null) {
-                        try {
-                            // 6 参版本要求发送方持有 SIGN_PERMISSION；模块 App 在
-                            // manifest 中声明并 uses 该 signature 权限，其他应用无法伪造广播。
-                            ContextCompat.registerReceiver(ctx, receiver, filter,
-                                    SIGN_PERMISSION, null, ContextCompat.RECEIVER_EXPORTED);
-                            env.module.log(Log.INFO, TAG,
-                                    "sign receiver registered (attempt " + (attempt + 1) + ")");
-                            return;
-                        } catch (Throwable t) {
-                            env.module.log(Log.WARN, TAG,
-                                    "sign receiver register failed", t);
-                            return;
+                final int[] failures = {0};
+                boolean registered;
+                try {
+                    registered = registerWithRetry(new RegisterAttempt() {
+                        @Override
+                        public boolean run() {
+                            Context ctx = Phase2Features.HostApp.context();
+                            if (ctx == null) {
+                                return false;
+                            }
+                            try {
+                                // 6 参版本要求发送方持有 SIGN_PERMISSION；模块 App 在
+                                // manifest 中声明并 uses 该 signature 权限，其他应用无法伪造广播。
+                                ContextCompat.registerReceiver(ctx, receiver, filter,
+                                        SIGN_PERMISSION, null, ContextCompat.RECEIVER_EXPORTED);
+                            } catch (Throwable t) {
+                                if (failures[0] < 3) {
+                                    env.module.log(Log.WARN, TAG,
+                                            "sign receiver register failed", t);
+                                }
+                                failures[0]++;
+                                return false;
+                            }
+                            return true;
                         }
-                    }
-                    try {
-                        Thread.sleep(REGISTER_RETRY_MS);
-                    } catch (InterruptedException e) {
-                        return;
-                    }
+                    }, REGISTER_RETRY_MS, REGISTER_ATTEMPTS);
+                } catch (InterruptedException e) {
+                    return; // 进程退出：静默结束。
                 }
-                env.module.log(Log.WARN, TAG,
-                        "sign receiver: context unavailable after retries");
+                if (registered) {
+                    env.module.log(Log.INFO, TAG, "sign receiver registered");
+                } else {
+                    env.module.log(Log.WARN, TAG,
+                            "sign receiver: context unavailable or register failed after "
+                                    + REGISTER_ATTEMPTS + " attempts");
+                }
             }
         });
         thread.setDaemon(true);

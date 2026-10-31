@@ -110,6 +110,13 @@ ANCHORS = {
 
     # ---------- H5 page hooks ----------
     "person_tab_attach": ("com.baidu.tieba.personTab.controller.PersonTabWebController", "z", "(Landroid/view/View;Landroid/os/Bundle;)V"),
+    # 22.13.1.1：UI-03 个人页注入链 k()/getInnerWebView。此前是 Phase1Features 里的
+    # 硬编码反射名（改名/改可见性即静默失效），已收编进锚点清单；签名用 dex 方法表
+    # 直接核实（classes11.dex：Lcom/baidu/tieba/personTab/controller/PersonTabWebController;
+    # ->k()Lcom/baidu/tieba/browser/TbWebView; 与
+    # Lcom/baidu/tieba/browser/TbWebView;->getInnerWebView()Landroid/webkit/WebView;）。
+    "person_tab_web_k": ("com.baidu.tieba.personTab.controller.PersonTabWebController", "k", "()Lcom/baidu/tieba/browser/TbWebView;"),
+    "tbwebview_inner": ("com.baidu.tieba.browser.TbWebView", "getInnerWebView", "()Landroid/webkit/WebView;"),
 }
 
 # type anchors used for instanceof-style checks

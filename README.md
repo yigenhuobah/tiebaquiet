@@ -107,7 +107,7 @@
 
 - `TiebaQuietModule`：libxposed 入口，仅注入贴吧主进程；安装完成后启动诊断回传。
 - `Feature` / `FeatureRegistry`：25 个功能的编号、remote key、文案、默认值、分组与安装器。
-- `anchor/AnchorTable`：读取打包进 APK 的 `anchors.json`（当前 55 个方法锚点 + 7 个类锚点），运行时反射校验类/方法是否存在；缺失时只禁用对应功能，版本不匹配只告警不阻断。
+- `anchor/AnchorTable`：读取打包进 APK 的 `anchors.json`（当前 57 个方法锚点 + 7 个类锚点），运行时反射校验类/方法是否存在；缺失时只禁用对应功能，版本不匹配只告警不阻断。
 - `feature/phase1|2|3`：各功能的 hook 安装器；`CardFilter` / `FeedCardSweeper` 为信息流过滤公共逻辑。
 - `Config` / `ConfigStore` / `ConfigMigration`：目标进程读、模块 App 写，新分组 `config` 优先、旧分组 `features` 兜底。
 - `ServiceBridge`：XposedService 绑定、占位 binder 过滤与 remote prefs 获取。
@@ -132,7 +132,7 @@ python tools/gen_anchors.py --apk <新版本apk> --out app/src/main/resources/an
 
 ### 已知限制（0.3.1）
 
-- **22.13.1.1 锚点已重生成，未逐项真机复验**：2026-10-31 基于 22.13.1.1（versionCode 369950981）APK 重新定位 14 处混淆锚点并重生成 anchors.json（55 方法 + 7 类全命中，0 MISSING）；功能行为未逐项真机回归。
+- **22.13.1.1 锚点已重生成，未逐项真机复验**：2026-10-31 基于 22.13.1.1（versionCode 369950981）APK 重新定位 14 处混淆锚点并重生成 anchors.json（55 方法 + 7 类全命中，0 MISSING）；功能行为未逐项真机回归。2026-11-01 追加：UI-03 注入链 `k()`/`getInnerWebView` 收编为锚点 `person_tab_web_k`/`tbwebview_inner`（57 方法 + 7 类），两个描述符已对 22.13.1.1 dex 逐一核实；`gen_anchors.py` 尚未携带 APK 重新全量校验，下次重生成时以 0 MISSING 为准。
 
 - **一键签到需 EN-08 开启**：关闭 EN-08 时接收器忽略签到广播，设置页按钮提示“请先开启”；点击按钮不再静默改写开关。
 - **签到页可打开，但本账号无法完成签到**：2026-10-29 真机（0.2.1）已触发并打开贴吧签到页；页面提示「吧内等级 7 级以上才可使用」，当前账号各吧为 1–6 级，因此没有实际完成签到。这是贴吧的账号等级门槛，不是模块失败。

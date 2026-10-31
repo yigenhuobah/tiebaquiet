@@ -7,7 +7,9 @@ import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -20,9 +22,11 @@ public class HookStateTest {
     @Test
     public void hitIncrementsCount() {
         Feature f = FeatureRegistry.byKey("splash_no_ad");
-        assertEquals(1L, HookState.hit(f));
-        assertEquals(2L, HookState.hit(f));
-        assertEquals(2L, HookState.hitCount(f));
+        // HookState 是进程级静态状态：按基线增量断言，其他用例触碰同一 Feature 也不影响。
+        long baseline = HookState.hitCount(f);
+        assertEquals("每次 hit 恰好 +1", baseline + 1L, HookState.hit(f));
+        assertEquals(baseline + 2L, HookState.hit(f));
+        assertEquals("hitCount 与累加结果一致", baseline + 2L, HookState.hitCount(f));
     }
 
     @Test
@@ -118,11 +122,23 @@ public class HookStateTest {
 
     @Test
     public void snapshotIsSortedByKey() {
-        Feature f = FeatureRegistry.byKey("clipboard_guard");
-        HookState.installed(f, "clipboard");
+        // 先 touch 键序较大的功能：快照若退回插入序实现，本用例必须失败；
+        // 两个键保证单独运行时排序断言也不再恒真。
+        Feature larger = FeatureRegistry.byKey("personalized_ad_off"); // reg.personalized_ad_off
+        Feature smaller = FeatureRegistry.byKey("hide_store_tab");     // reg.hide_store_tab
+        HookState.installed(larger, "personalized_ad");
+        HookState.installed(smaller, "hide_store_tab");
         Map<String, String> snapshot = HookState.snapshot();
+
+        List<String> keys = new ArrayList<>(snapshot.keySet());
+        String smallKey = ReportProtocol.PREFIX_REG + smaller.key;
+        String largeKey = ReportProtocol.PREFIX_REG + larger.key;
+        assertTrue("本次写入的两个键都必须出现在快照里",
+                keys.containsAll(Arrays.asList(smallKey, largeKey)));
+        assertTrue("小键必须排在大键之前: " + keys,
+                keys.indexOf(smallKey) < keys.indexOf(largeKey));
         String previous = "";
-        for (String key : snapshot.keySet()) {
+        for (String key : keys) {
             assertTrue("快照键必须按字典序: " + previous + " > " + key,
                     previous.compareTo(key) <= 0);
             previous = key;
@@ -131,10 +147,20 @@ public class HookStateTest {
 
     @Test
     public void touchedIsSortedByCode() {
-        Feature f = FeatureRegistry.byKey("one_key_sign");
-        HookState.installed(f, "sign");
+        // 先 touch 编号较大的功能（PV-03），再 touch 编号较小的（AD-04）：
+        // touched 若退回插入序实现，本用例必须失败；两个元素保证单独运行时不再恒真。
+        Feature larger = FeatureRegistry.byKey("keep_alive_block");    // PV-03
+        Feature smaller = FeatureRegistry.byKey("forum_promo_filter"); // AD-04
+        HookState.installed(larger, "keep_alive");
+        HookState.installed(smaller, "forum_promo");
+        List<Feature> touched = HookState.touched();
+
+        assertTrue("本次触碰的两个 Feature 都必须在 touched 里",
+                touched.containsAll(Arrays.asList(smaller, larger)));
+        assertTrue("编号小的功能必须排在前面",
+                touched.indexOf(smaller) < touched.indexOf(larger));
         String previous = "";
-        for (Feature feature : HookState.touched()) {
+        for (Feature feature : touched) {
             assertTrue("touched 必须按编号排序: " + previous + " > " + feature.code,
                     previous.compareTo(feature.code) <= 0);
             previous = feature.code;

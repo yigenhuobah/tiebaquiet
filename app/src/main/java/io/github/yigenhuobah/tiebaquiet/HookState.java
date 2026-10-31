@@ -133,8 +133,15 @@ public final class HookState {
     /**
      * 打平为 {@code reg.<key> / hit.<key> / skip.<key>} 的 Map。
      * 没有注册标签、没有命中、没有 skip 的功能不会出现在快照里。
+     *
+     * <p><b>仅供单测使用</b>（HookStateTest），禁止接入上报路径：生产上报必须走
+     * {@code hooks.Report#snapshot()}，后者对每个 touched 功能无条件发送
+     * reg/skip/crit（缺失填空串）以清掉上一会话遗留的 skip/crit，并附带
+     * meta.session / meta.updated_at。本方法缺空值与 crit./meta 键，一旦接入上报
+     * 会破坏“空串清旧 skip”协议并丢失 critical 标记；收窄为包私有以保证
+     * hooks 包（及任何生产代码）无法调用，仅同包测试可用。
      */
-    public static Map<String, String> snapshot() {
+    static Map<String, String> snapshot() {
         Map<String, String> out = new TreeMap<>();
         for (Feature feature : touched()) {
             List<String> labels = labels(feature);

@@ -54,6 +54,9 @@ public final class Phase1Features {
             "live_item_16_set_data", "live_item_45_set_data",
     };
 
+    /** 个人页注入脚本的重试上限（约 0.8s + 14×0.7s ≈ 10.6s 后放弃）。 */
+    static final int INJECT_MAX_ATTEMPTS = 15;
+
     private Phase1Features() {
     }
 
@@ -308,6 +311,16 @@ public final class Phase1Features {
     /** 个人中心精简：H5 “我的”页注入 CSS/JS 隐藏会员横幅、钱包、任务与游戏专区。 */
     public static boolean installProfileCleanup(HookEnv env) {
         final Feature f = FeatureRegistry.byKey("profile_cleanup");
+        // 注入链 k()/getInnerWebView 已收编进 anchors.json（person_tab_web_k /
+        // tbwebview_inner）：由 gen_anchors 按目标 APK 校验，AnchorTable 再按
+        // 签名解析并 setAccessible。改名/改可见性时这里得到 null，功能按锚点
+        // 缺失显式跳过，不再 hook 后靠运行期硬编码反射名静默失效。
+        final Method getWeb = env.anchors.method("person_tab_web_k");
+        final Method getInner = env.anchors.method("tbwebview_inner");
+        if (getWeb == null || getInner == null) {
+            f.markSkip("锚点缺失 person_tab_web_k/tbwebview_inner");
+            return false;
+        }
         Method method = env.anchors.method("person_tab_attach");
         return f.hook(env, method, "person_tab_attach", new XposedInterface.Hooker() {
             @Override
@@ -323,27 +336,42 @@ public final class Phase1Features {
                         @Override
                         public void run() {
                             try {
-                                Object tbWebView = controller.getClass()
-                                        .getMethod("k").invoke(controller);
+                                Object tbWebView = getWeb.invoke(controller);
                                 WebView inner = null;
                                 if (tbWebView != null) {
-                                    Object raw = tbWebView.getClass()
-                                            .getMethod("getInnerWebView").invoke(tbWebView);
+                                    Object raw = getInner.invoke(tbWebView);
                                     if (raw instanceof WebView) {
                                         inner = (WebView) raw;
                                     }
                                 }
-                                if (attempts[0] == 0) {
-                                    env.module.log(Log.INFO, Feature.TAG,
-                                            f.code + " profile cleanup js applied");
-                                }
                                 if (inner != null) {
+                                    if (attempts[0] == 0) {
+                                        env.module.log(Log.INFO, Feature.TAG,
+                                                f.code + " profile cleanup js applied");
+                                    }
                                     inner.evaluateJavascript(PROFILE_JS, null);
                                 }
-                            } catch (Throwable ignored) {
+                                String skip = profileCleanupSkipReason(
+                                        attempts[0], INJECT_MAX_ATTEMPTS, inner != null);
+                                if (skip != null) {
+                                    env.module.log(Log.WARN, Feature.TAG,
+                                            f.code + " profile cleanup: " + skip);
+                                    f.markSkip(skip);
+                                }
+                            } catch (Throwable t) {
+                                // 锚点已在安装期校验，这里只剩运行期异常（页面尚未
+                                // 就绪等）：记日志，次数用尽才标记 skip，避免把瞬时
+                                // 失败当成锚点失效。
+                                env.module.log(Log.WARN, Feature.TAG,
+                                        f.code + " profile cleanup inject failed", t);
+                                String skip = profileCleanupSkipReason(
+                                        attempts[0], INJECT_MAX_ATTEMPTS, false);
+                                if (skip != null) {
+                                    f.markSkip(skip);
+                                }
                             }
                             attempts[0]++;
-                            if (attempts[0] < 15) {
+                            if (attempts[0] < INJECT_MAX_ATTEMPTS) {
                                 handler.postDelayed(this, 700);
                             }
                         }
@@ -367,6 +395,23 @@ public final class Phase1Features {
                 return filtered != null ? filtered : result;
             }
         });
+    }
+
+    /**
+     * 个人页注入的收尾决策（纯函数，便于 JVM 单测）：本轮拿到内嵌 WebView
+     * 返回 null；重试次数用尽仍拿不到时返回诊断 skip 文案。
+     *
+     * <p>{@code k()}/{@code getInnerWebView} 已收编进 anchors.json（键
+     * {@code person_tab_web_k}/{@code tbwebview_inner}，gen_anchors 按 APK 校验、
+     * AnchorTable 按签名解析）；安装期解析失败会直接按锚点缺失跳过，走到这里的
+     * 只有安装成功后的运行期取不到 WebView（页面未就绪等），用尽重试后必须
+     * 标记 skip，不能静默假成功。
+     */
+    static String profileCleanupSkipReason(int attempt, int maxAttempts, boolean injected) {
+        if (injected || attempt < maxAttempts - 1) {
+            return null;
+        }
+        return "重试用尽仍未注入（person_tab_web_k/tbwebview_inner）";
     }
 
     private static boolean looksLikeFollowTab(Object item) {

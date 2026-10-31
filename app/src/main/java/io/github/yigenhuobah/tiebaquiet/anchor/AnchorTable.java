@@ -65,6 +65,11 @@ public final class AnchorTable {
             String signature = entry.optString("s");
             Class<?>[] params = parseParameterTypes(signature, loader);
             Method method = cls.getDeclaredMethod(name, params);
+            if (!returnTypeMatches(method, signature, loader)) {
+                // 同名同参但返回类型已变：混淆方法语义已变，按锚点缺失跳过
+                // 而不是照常 hook（返回类型不缓存，下次仍会重试）。
+                return null;
+            }
             method.setAccessible(true);
             methodCache.put(key, method);
             return method;
@@ -135,6 +140,39 @@ public final class AnchorTable {
                     json.optLong("versionCode"), json, loader);
         } catch (Throwable t) {
             return null;
+        }
+    }
+
+    /**
+     * 解析 JVM 描述符的返回类型，如 "(I)V" → void.class、
+     * "(Z)[[Ljava/lang/String;" → String[][].class。
+     * 抽成静态方法便于 JVM 单测，不触碰 JSON 与框架。
+     */
+    public static Class<?> parseReturnType(String signature, ClassLoader loader) {
+        if (signature == null || !signature.startsWith("(")) {
+            throw new IllegalArgumentException("bad signature: " + signature);
+        }
+        int end = signature.indexOf(')');
+        if (end < 0 || end + 1 >= signature.length()) {
+            throw new IllegalArgumentException("bad signature: " + signature);
+        }
+        // 复用参数解析器：把返回类型包成单参描述符，避免维护第二份类型解析。
+        return parseParameterTypes("(" + signature.substring(end + 1) + ")V", loader)[0];
+    }
+
+    /**
+     * 返回类型校验：anchors.json 的 {@code s} 字段包含返回类型，解析结果必须与
+     * 实际方法的返回类型一致；不一致（同名同参但语义已变的混淆方法）或描述符
+     * 非法都视为锚点失效，调用方按缺失跳过。
+     */
+    static boolean returnTypeMatches(Method method, String signature, ClassLoader loader) {
+        if (method == null) {
+            return false;
+        }
+        try {
+            return method.getReturnType() == parseReturnType(signature, loader);
+        } catch (Throwable t) {
+            return false;
         }
     }
 

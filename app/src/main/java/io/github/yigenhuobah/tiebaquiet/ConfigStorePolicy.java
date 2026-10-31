@@ -22,11 +22,22 @@ public final class ConfigStorePolicy {
     }
 
     /**
-     * 一次写入的最终结果：新 group 或旧 group 任一 commit 成功，目标进程都能读到
-     * （目标侧同样按“新 key 优先、旧 key 兜底”解析）。
+     * 一次写入的完整判定：目标进程按“新 key 优先、旧 key 兜底”解析配置，因此
+     * 新 group commit 成功即成功；新 group 未写成功时，只有它此前没有该 key
+     * （旧 group 的新值不会被遮蔽）且旧 group commit 成功，目标进程才读得到新值。
+     *
+     * @param newGroupCommitted    新 group 本次 commit 是否成功
+     * @param legacyGroupCommitted 旧 group 本次 commit 是否成功
+     * @param newGroupHadValue     本次写入前新 group 是否已持有该 key；commit 失败
+     *                             不会改动已落盘内容，故在 commit 前用
+     *                             {@code newPrefs.contains(key)} 记录即可
      */
-    public static boolean committed(boolean newGroupCommitted, boolean legacyGroupCommitted) {
-        return newGroupCommitted || legacyGroupCommitted;
+    public static boolean committed(boolean newGroupCommitted, boolean legacyGroupCommitted,
+                                    boolean newGroupHadValue) {
+        if (newGroupCommitted) {
+            return true;
+        }
+        return legacyGroupCommitted && !newGroupHadValue;
     }
 
     /**

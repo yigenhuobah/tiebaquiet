@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
@@ -31,8 +32,9 @@ import io.github.yigenhuobah.tiebaquiet.StatusProvider;
  * 被杀后快照永久停在上一次“以为成功”的状态。provider 不可达或提交失败时退避 60 秒，
  * 不刷日志。只在主进程启动（由入口类保证）。
  *
- * <p>每次回传都带 {@code meta.session} 与 {@code meta.updated_at}：前者用于丢弃
- * 迟到的旧会话写入，后者用于 10 分钟 TTL 判定。内容去重时必须剔除 meta 键，
+ * <p>每次回传都带 {@code meta.session} 与 {@code meta.updated_at}：前者用于会话
+ * 身份比较（不同即新会话；无会话标识的旧版回传被接收端整批丢弃），后者用于
+ * 10 分钟 TTL 判定。内容去重时必须剔除 meta 键，
  * 否则每轮时间戳变化都会让快照“看起来变了”。
  */
 public final class Report {
@@ -43,8 +45,17 @@ public final class Report {
     private static final long PERIOD_SECONDS = 3L;
     private static final long BACKOFF_MS = 60_000L;
 
-    /** 本次目标进程会话标识：用启动时刻毫秒值，便于跨会话比较新旧。 */
-    static final String SESSION = String.valueOf(System.currentTimeMillis());
+    /**
+     * 本次目标进程会话标识："s<millis>-<8位hex>"。毫秒只作参考，唯一性由进程随机
+     * 后缀保证，时钟回拨不会让新会话“变小”；接收端按身份比较（不同即新会话）。
+     */
+    static final String SESSION = newSessionId();
+
+    /** 会话标识的生成点（每模块一处）：启动毫秒 + 随机 8 位十六进制后缀。 */
+    private static String newSessionId() {
+        return "s" + System.currentTimeMillis() + "-"
+                + UUID.randomUUID().toString().substring(0, 8);
+    }
 
     /** 内容未变化时的重发间隔（心跳）：5 分钟，必须小于 provider 的 10 分钟 TTL。 */
     static final long HEARTBEAT_MS = 5 * 60 * 1000L;

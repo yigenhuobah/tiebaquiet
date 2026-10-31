@@ -75,11 +75,17 @@ public class TiebaQuietModule extends XposedModule {
                 result = feature.install(env);
             } catch (Throwable t) {
                 log(Log.WARN, TAG, "feature " + feature.code + " crashed", t);
+                // 安装器抛异常说明整个功能崩溃：必须标记 critical，让失败横幅与诊断页
+                // 可见，否则该功能在快照里只有空 reg/skip，显示“—”且不计入失败。
+                HookState.markNotFoundCritical(feature,
+                        "安装异常 " + t.getClass().getSimpleName());
                 result = false;
             }
             // 零成功安装锚点且存在 skip：该功能整体不可用，升级为 critical。
             // 部分锚点缺失时 installedCount > 0，保持普通 skip 只作诊断。
-            if (HookState.installedCount(feature) == 0 && HookState.skipReason(feature) != null) {
+            // 安装器崩溃已在上面标 critical（skip 是崩溃原因），这里不再覆盖。
+            if (HookState.installedCount(feature) == 0 && HookState.skipReason(feature) != null
+                    && !HookState.hasCriticalSkip(feature)) {
                 HookState.markNotFoundCritical(feature, "无可用锚点");
                 result = false;
             }

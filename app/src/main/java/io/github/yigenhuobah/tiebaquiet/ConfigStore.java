@@ -62,7 +62,9 @@ public final class ConfigStore {
     public interface WriteCallback {
         /**
          * @param key     写入的开关 key
-         * @param success 新 group 或旧 group 至少一个真实 commit 成功
+         * @param success 目标进程按“新 key 优先、旧 key 兜底”解析后能读到新值；
+         *                新 group 失败但残留该 key 旧值时为 false（残留旧值会
+         *                压过旧 group 的新值），调用方必须提示并回滚开关
          */
         void onWriteResult(String key, boolean success);
     }
@@ -182,6 +184,11 @@ public final class ConfigStore {
             writeExecutor.execute(() -> {
                 boolean newCommitted = false;
                 boolean legacyCommitted = false;
+                // 新 group 是否已持有该 key 必须在 commit 前记录：commit 失败不会
+                // 改动已落盘内容，且框架 RemotePreferences 在 binder 提交前就更新
+                // 本地缓存，失败后再 contains 读到的是不可信的新值。
+                final boolean newGroupHadValue =
+                        newPrefs != null && readBoolean(newPrefs, key) != null;
                 if (newPrefs != null) {
                     try {
                         newCommitted = commit(newPrefs, key, value);
@@ -196,7 +203,8 @@ public final class ConfigStore {
                         Log.w(TAG, "commit failed (legacy group): " + key, t);
                     }
                 }
-                final boolean success = ConfigStorePolicy.committed(newCommitted, legacyCommitted);
+                final boolean success = ConfigStorePolicy.committed(
+                        newCommitted, legacyCommitted, newGroupHadValue);
                 if (!success) {
                     Log.w(TAG, "config write failed: " + key);
                 }

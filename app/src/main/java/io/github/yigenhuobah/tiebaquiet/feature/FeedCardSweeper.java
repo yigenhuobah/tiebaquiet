@@ -47,6 +47,14 @@ public final class FeedCardSweeper {
     private static final Map<Object, SweepState> ACTIVE =
             Collections.synchronizedMap(new WeakHashMap<>());
 
+    /**
+     * adapter -> 最近一次 sweep 的策略。链结束后仍保留（WeakHashMap，随 adapter 回收），
+     * 供 attach 回调对复用后的目标卡重新判定隐藏——否则链结束后被回收的直播/热点卡
+     * 会在 detach 恢复可见后不再被隐藏，直到下一次 setList 重新调度。
+     */
+    private static final Map<Object, SweepState> POLICY =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
     /** 已挂过 child attach 监听器的 RecyclerView，避免重复 add。 */
     private static final Map<View, Boolean> WATCHED =
             Collections.synchronizedMap(new WeakHashMap<>());
@@ -133,15 +141,57 @@ public final class FeedCardSweeper {
             SweepState state = ACTIVE.get(adapter);
             if (state == null) {
                 state = new SweepState();
+                // 新链继承最近一次策略（同进程内开关不变）：否则上一条链的 live/hot
+                // 只留在 POLICY 里，policyOf 会优先返回只含新 flag 的链状态。
+                SweepState previous = POLICY.get(adapter);
+                if (previous != null) {
+                    state.live = previous.live;
+                    state.hot = previous.hot;
+                }
                 ACTIVE.put(adapter, state);
             }
             state.live |= hideLive;
             state.hot |= hideHot;
+            rememberPolicy(adapter, state.live, state.hot);
             if (state.scheduled) {
                 return false;
             }
             state.scheduled = true;
             return true;
+        }
+    }
+
+    /** 记录 adapter 的累计策略，供链结束后的 attach 回调查询。幂等，只增不减。 */
+    static void rememberPolicy(Object adapter, boolean live, boolean hot) {
+        if (adapter == null || (!live && !hot)) {
+            return;
+        }
+        synchronized (POLICY) {
+            SweepState policy = POLICY.get(adapter);
+            if (policy == null) {
+                policy = new SweepState();
+                POLICY.put(adapter, policy);
+            }
+            policy.live |= live;
+            policy.hot |= hot;
+        }
+    }
+
+    /**
+     * attach 回调使用的判定策略：活跃链优先；链已结束（{@link #stateOf} 为 null）
+     * 时沿用最近一次策略，保证复用后的目标卡仍会被隐藏。仅本会话开启过
+     * 直播/热点隐藏的 adapter 才有策略，其余返回 null（fail-open 不判定）。
+     */
+    static SweepState policyOf(Object adapter) {
+        SweepState state = stateOf(adapter);
+        if (state != null) {
+            return state;
+        }
+        if (adapter == null) {
+            return null;
+        }
+        synchronized (POLICY) {
+            return POLICY.get(adapter);
         }
     }
 
@@ -416,9 +466,10 @@ public final class FeedCardSweeper {
 
     private static void onChildAttached(View recycler, View child, HookEnv env) {
         Object adapter = adapterOf(recycler);
-        SweepState state = stateOf(adapter);
+        SweepState state = policyOf(adapter);
         if (state == null || (!state.live && !state.hot)) {
-            // 没有活跃策略时不判定，避免在链结束后重新引入误删。
+            // 本会话从未开启直播/热点隐藏时不判定；有策略时即使链已结束也重新判定，
+            // 避免 detach 恢复可见的被回收目标卡从此不再隐藏。
             return;
         }
         resolveMethods(recycler, adapter, state);

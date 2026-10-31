@@ -3,7 +3,6 @@ package io.github.yigenhuobah.tiebaquiet.feature;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 import io.github.yigenhuobah.tiebaquiet.HookEnv;
 
@@ -83,15 +82,13 @@ public final class CardFilter {
         return value instanceof String ? (String) value : null;
     }
 
-    public static Object dataOf(HookEnv env, Object item) {
-        if (item == null) {
-            return null;
-        }
-        Class<?> nt9 = env.anchors.clazz("nt9");
-        if (nt9 == null || !nt9.isInstance(item)) {
-            return null;
-        }
-        return invoke(env.anchors.method("nt9_d"), item);
+    /**
+     * 直播类型键判定：与 {@link FeedCardSweeper#isLiveTypeKey} 共用同一份明确
+     * token 白名单，避免 "delivery"/"olive" 这类含 live 子串的普通类型键
+     * 被 {@link #filterLive} 误删或被清扫器误隐藏。抽成静态方法便于 JVM 单测。
+     */
+    static boolean isLiveTypeKey(String typeKey) {
+        return FeedCardSweeper.isLiveTypeKey(typeKey);
     }
 
     public static boolean isLiveCard(HookEnv env, Object item) {
@@ -102,9 +99,7 @@ public final class CardFilter {
         if (nt9 == null || !nt9.isInstance(item)) {
             return false;
         }
-        // 卡片类型键里带 live 的直接判定为直播卡（稳定字符串，跨版本可用）。
-        String typeKey = typeKey(env, item);
-        if (typeKey != null && typeKey.toLowerCase(Locale.ROOT).contains("live")) {
+        if (isLiveTypeKey(typeKey(env, item))) {
             return true;
         }
         Object data = invoke(env.anchors.method("nt9_d"), item);

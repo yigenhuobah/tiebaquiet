@@ -31,6 +31,9 @@ import java.util.concurrent.Future;
  *
  * <p>SharedPreferences 读取与 PackageManager 查询都在后台单线程完成，
  * 主线程只负责把准备好的数据渲染成 Preference。
+ *
+ * <p>回传数据有 TTL：超过 {@link StatusProvider#REPORT_TTL_MS} 没有新回传时，
+ * 旧会话的 registered/hit/skip 一律按无数据处理，与主页失败横幅的过期语义一致。
  */
 public class DiagnosticsFragment extends PreferenceFragmentCompat {
 
@@ -233,6 +236,9 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
     /** 在后台线程一次性读完所有功能的回传与模块版本。 */
     private static Snapshot loadSnapshot(Context context, String cachedVersion) {
         long refreshedAt = System.currentTimeMillis();
+        // 与主页 failedFeatureCount 的 TTL 语义一致：超过 TTL 没有新回传，
+        // 旧会话的 reg/hit/skip 不能再当作当前状态展示。
+        boolean fresh = StatusProvider.hasFreshReport(context);
         Map<String, RowData> rows = new HashMap<>();
         boolean hasData = false;
         for (Feature f : FeatureRegistry.all()) {
@@ -244,9 +250,7 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
             String reg = StatusProvider.reportString(context, StatusProvider.PREFIX_REG, f.key);
             long hit = StatusProvider.reportHit(context, f.key);
             String skip = StatusProvider.reportString(context, StatusProvider.PREFIX_SKIP, f.key);
-            boolean reported = (reg != null && !reg.isEmpty())
-                    || (skip != null && !skip.isEmpty())
-                    || hit > 0;
+            boolean reported = reportReported(reg, skip, hit, fresh);
             rows.put(f.key, new RowData(reg, skip, hit, reported));
             if (reported) {
                 hasData = true;
@@ -264,6 +268,20 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
         } catch (Throwable t) {
             return null;
         }
+    }
+
+    /**
+     * 纯逻辑：单功能回传是否算“有数据”。仅新鲜会话计入——回传超过 TTL
+     * （{@link StatusProvider#REPORT_TTL_MS}）后一律按无数据处理，不再把旧会话的
+     * registered/hit/skip 当作当前状态，与主页失败横幅的过期语义保持一致。
+     */
+    static boolean reportReported(String reg, String skip, long hit, boolean fresh) {
+        if (!fresh) {
+            return false;
+        }
+        return (reg != null && !reg.isEmpty())
+                || (skip != null && !skip.isEmpty())
+                || hit > 0;
     }
 
     /** 单功能的后台读取结果。 */
