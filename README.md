@@ -107,7 +107,7 @@
 
 - `TiebaQuietModule`：libxposed 入口，仅注入贴吧主进程；安装完成后启动诊断回传。
 - `Feature` / `FeatureRegistry`：25 个功能的编号、remote key、文案、默认值、分组与安装器。
-- `anchor/AnchorTable`：读取打包进 APK 的 `anchors.json`（当前 54 个方法锚点 + 7 个类锚点），运行时反射校验类/方法是否存在；缺失时只禁用对应功能，版本不匹配只告警不阻断。
+- `anchor/AnchorTable`：读取打包进 APK 的 `anchors.json`（当前 55 个方法锚点 + 7 个类锚点），运行时反射校验类/方法是否存在；缺失时只禁用对应功能，版本不匹配只告警不阻断。
 - `feature/phase1|2|3`：各功能的 hook 安装器；`CardFilter` / `FeedCardSweeper` 为信息流过滤公共逻辑。
 - `Config` / `ConfigStore` / `ConfigMigration`：目标进程读、模块 App 写，新分组 `config` 优先、旧分组 `features` 兜底。
 - `ServiceBridge`：XposedService 绑定、占位 binder 过滤与 remote prefs 获取。
