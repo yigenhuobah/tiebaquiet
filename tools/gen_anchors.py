@@ -33,8 +33,8 @@ ANCHORS = {
     # ---------- phase 1 ----------
     "splash_forbid_b": ("com.baidu.tieba.ad.under.utils.SplashForbidAdHelperKt", "b", "()Z"),
     "yun_dialog_can_show": ("com.baidu.tbadk.core.dialog.yun.YunDialogManager", "canShowDialog", "(Lcom/baidu/tieba/od6;)Z"),
-    "home_ad_float": ("com.baidu.tbadk.TbSingleton", "getHomeAdFloatViewItemData", "()Lcom/baidu/tieba/fo6;"),
-    "pb_ad_float": ("com.baidu.tbadk.TbSingleton", "getPbAdFloatViewItemData", "()Lcom/baidu/tieba/fo6;"),
+    "home_ad_float": ("com.baidu.tbadk.TbSingleton", "getHomeAdFloatViewItemData", "()Lcom/baidu/tieba/po6;"),
+    "pb_ad_float": ("com.baidu.tbadk.TbSingleton", "getPbAdFloatViewItemData", "()Lcom/baidu/tieba/po6;"),
     "template_set_list": ("com.baidu.tieba.feed.list.TemplateAdapter", "setList", "(Ljava/util/List;)V"),
     "tab_add_tip": ("com.baidu.tbadk.mainTab.TbFragmentTabIndicator", "addTip", "(Ljava/lang/String;Lcom/baidu/tbadk/mainTab/TbFragmentTabIndicator$FragmentTapTip;)V"),
     "tab_add_tip_2": ("com.baidu.tbadk.mainTab.FragmentTabIndicator", "addTip", "(Ljava/lang/String;Lcom/baidu/tbadk/mainTab/TbFragmentTabIndicator$FragmentTapTip;)V"),
@@ -44,16 +44,17 @@ ANCHORS = {
     "msg_red_dot_refresh": ("com.baidu.tbadk.core.view.MessageRedDotView", "refresh", "(I)V"),
     "msg_red_dot_refresh_opt": ("com.baidu.tbadk.core.view.MessageRedDotView", "refreshFeedUIOpt", "(I)V"),
     "msg_red_dot_refresh_str": ("com.baidu.tbadk.core.view.MessageRedDotView", "refresh", "(Ljava/lang/String;Z)V"),
-    "rec_forum_strategy_h": ("com.baidu.tieba.forum.strategy.RecommendForumShowStrategy", "h", "(Lcom/baidu/tieba/y7a;)Z"),
-    "upgrade_pop": ("com.baidu.tbadk.core.util.UpgradePopWindowHelper", "showPopWindow", "(Lcom/baidu/tbadk/TbPageContext;Lcom/baidu/tieba/op6;)V"),
+    "rec_forum_strategy_h": ("com.baidu.tieba.forum.strategy.RecommendForumShowStrategy", "h", "(Lcom/baidu/tieba/i8a;)Z"),
+    "upgrade_pop": ("com.baidu.tbadk.core.util.UpgradePopWindowHelper", "showPopWindow", "(Lcom/baidu/tbadk/TbPageContext;Lcom/baidu/tieba/yp6;)V"),
     "easter_egg_o": ("com.baidu.tieba.easteregg.EasterEggAdController", "o", "(Lcom/baidu/tieba/easteregg/data/EasterEggAdData;)V"),
     "new_scroll_r": ("com.baidu.tieba.homepage.framework.indicator.NewScrollFragmentAdapter", "r", "(Landroid/content/Context;Ljava/util/List;)V"),
     "skin_type": ("com.baidu.tbadk.core.TbadkCoreApplication", "getSkinType", "()I"),
-    "forum_res_parser_a": ("com.baidu.tieba.forum.data.protobuf.BaseForumResParser", "a", "(Ljava/lang/Object;Lcom/baidu/tieba/ej9;Ljava/util/Map;ZLjava/util/Map;)Ljava/util/List;"),
+    "forum_res_parser_a": ("com.baidu.tieba.forum.data.protobuf.BaseForumResParser", "a", "(Ljava/lang/Object;Lcom/baidu/tieba/vj9;Ljava/util/Map;ZLjava/util/Map;)Ljava/util/List;"),
 
     # ---------- reflection helpers (filtering) ----------
-    "nt9_d": ("com.baidu.tieba.nt9", "d", "()Ljava/lang/Object;"),
-    "nt9_b": ("com.baidu.tieba.nt9", "b", "()Ljava/lang/String;"),
+    # 22.13.1.1 重定位：nt9→eu9（接口结构 b()/d() 不变，62 个实现类；旧名被无关类复用）。
+    "nt9_d": ("com.baidu.tieba.eu9", "d", "()Ljava/lang/Object;"),
+    "nt9_b": ("com.baidu.tieba.eu9", "b", "()Ljava/lang/String;"),
     "thread_get_is_live": ("com.baidu.tbadk.core.data.ThreadData", "getIsLive", "()I"),
     "thread_is_interview_live": ("com.baidu.tbadk.core.data.ThreadData", "isInterviewLive", "()Z"),
     "thread_is_live_thread": ("com.baidu.tbadk.core.data.ThreadData", "isLiveThread", "()Z"),
@@ -62,10 +63,13 @@ ANCHORS = {
     "thread_is_ala_live_user": ("com.baidu.tbadk.core.data.ThreadData", "isAlaLiveUser", "()Z"),
     "ala_info_yy_live": ("com.baidu.tbadk.core.data.AlaInfoData", "getIsYYLiveUi", "()Z"),
     "thread_ala_info": ("com.baidu.tbadk.core.data.ThreadData", "getThreadAlaInfo", "()Lcom/baidu/tbadk/core/data/AlaInfoData;"),
-    "em8_get_thread": ("com.baidu.tieba.em8", "getThreadData", "()Lcom/baidu/tbadk/core/data/ThreadData;"),
+    # 22.13.1.1 重定位：em8→tm8（HomePageAlaLiveThreadAdapter 调用方证实，父类 fm8→um8）。
+    "em8_get_thread": ("com.baidu.tieba.tm8", "getThreadData", "()Lcom/baidu/tbadk/core/data/ThreadData;"),
     "live_adapter_fill": ("com.baidu.tieba.homepage.personalize.adapter.HomePageAlaLiveThreadAdapter", "onFillViewHolder", "(ILandroid/view/View;Landroid/view/ViewGroup;Ljava/lang/Object;Lcom/baidu/adp/widget/ListView/TypeAdapter$ViewHolder;)Landroid/view/View;"),
-    "ala_live_card_bind": ("com.baidu.tieba.compact.AlaLiveAttentionCardView", "c", "(Lcom/baidu/tieba/rl8;)V"),
-    "live_card_create": ("com.baidu.tieba.ssb", "a", "(Landroid/view/ViewGroup;I)Landroid/view/View;"),
+    # 22.13.1.1 重定位：绑定方法 c(rl8)→b(gm8)（调用方 ko8.e→zo8.e 拓扑一致）；
+    # 适配器 ssb→nsb（方法集 a-k 逐一同构）。
+    "ala_live_card_bind": ("com.baidu.tieba.compact.AlaLiveAttentionCardView", "b", "(Lcom/baidu/tieba/gm8;)V"),
+    "live_card_create": ("com.baidu.tieba.nsb", "a", "(Landroid/view/ViewGroup;I)Landroid/view/View;"),
     "live_item_16_set_data": ("com.baidu.live.business.Live16Ratio9ItemView", "setData", "(Lcom/baidu/live/business/model/data/LiveRoomEntity;I)V"),
     "live_item_45_set_data": ("com.baidu.live.business.Live4Ratio5ItemView", "setData", "(Lcom/baidu/live/business/model/data/LiveRoomEntity;I)V"),
     "thread_ad_url": ("com.baidu.tbadk.core.data.ThreadData", "getAd_url", "()Ljava/lang/String;"),
@@ -82,7 +86,9 @@ ANCHORS = {
     # ---------- phase 2 ----------
     "pid_loader_load": ("com.fun.ad.sdk.internal.api.BasePidLoader", "load", "(Landroid/content/Context;Lcom/fun/ad/sdk/FunAdSlot;Lcom/fun/ad/sdk/internal/api/SidSessionMeta;)Z"),
     "nad_requester_a": ("com.baidu.nadcore.requester.NadRequester", "a", "(Lcom/baidu/nadcore/requester/RequestParameters;Lcom/baidu/nadcore/requester/NadRequester$b;)V"),
-    "qy8_c": ("com.baidu.tieba.qy8", "c", "(Lcom/baidu/tieba/c18;Lcom/baidu/tieba/i18;)V"),
+    # 22.13.1.1 重定位：qy8→fz8（c() 内 getFeedAd URL、d() 返回 asyncAfd 双指纹），
+    # c18→r18、i18→x18（接口 a/b/c 形状不变）。
+    "qy8_c": ("com.baidu.tieba.fz8", "c", "(Lcom/baidu/tieba/r18;Lcom/baidu/tieba/x18;)V"),
     "add_lz": ("com.baidu.tieba.pb.pagebrowser.net.PageBrowserRequestMessage", "addLz", "(Ltbclient/PbList/DataReq$Builder;)V"),
     "add_r": ("com.baidu.tieba.pb.pagebrowser.net.PageBrowserRequestMessage", "addR", "(Ltbclient/PbList/DataReq$Builder;)V"),
     "watermark_type": ("com.baidu.tieba.j76", "b", "()I"),
@@ -97,8 +103,10 @@ ANCHORS = {
     "keep_alive": ("com.baidu.tieba.ala.ALaKeepAliveService", "startService", "(Landroid/content/Context;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V"),
 
     # ---------- ad insertion gates ----------
-    "ad_insert_gate": ("com.baidu.tieba.dw7", "n", "(Lcom/baidu/tieba/ad/AbsDataRecorder$Scene;)Z"),
-    "ad_card_gate": ("com.baidu.tieba.bie", "h", "(Lcom/baidu/tbadk/core/data/AdvertAppInfo;)Z"),
+    # 22.13.1.1 重定位：dw7→qw7（FrsFeedAdStatic.e 等调用方拓扑一致）；
+    # bie→ike（方法表/字符串常量/调用方三方同构）。
+    "ad_insert_gate": ("com.baidu.tieba.qw7", "n", "(Lcom/baidu/tieba/ad/AbsDataRecorder$Scene;)Z"),
+    "ad_card_gate": ("com.baidu.tieba.ike", "h", "(Lcom/baidu/tbadk/core/data/AdvertAppInfo;)Z"),
 
     # ---------- H5 page hooks ----------
     "person_tab_attach": ("com.baidu.tieba.personTab.controller.PersonTabWebController", "z", "(Landroid/view/View;Landroid/os/Bundle;)V"),
@@ -106,13 +114,15 @@ ANCHORS = {
 
 # type anchors used for instanceof-style checks
 CLASSES = {
-    "nt9": "com.baidu.tieba.nt9",
+    # 22.13.1.1 重定位：nt9→eu9、em8→tm8；gje$a→nle$a（lego 适配器 gje→nle，
+    # 包装类字段 AdvertAppInfo/I/String 逐一对应，fcc→acc）。
+    "nt9": "com.baidu.tieba.eu9",
     "advert_app_info": "com.baidu.tbadk.core.data.AdvertAppInfo",
     "thread_data": "com.baidu.tbadk.core.data.ThreadData",
     "lego_ad_card": "com.baidu.tieba.recapp.lego.model.AdCard",
     "lego_ad_data": "com.baidu.tieba.oke",
-    "lego_ad_wrapper": "com.baidu.tieba.gje$a",
-    "live_thread_wrapper": "com.baidu.tieba.em8",
+    "lego_ad_wrapper": "com.baidu.tieba.nle$a",
+    "live_thread_wrapper": "com.baidu.tieba.tm8",
 }
 
 

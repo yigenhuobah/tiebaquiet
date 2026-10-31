@@ -1,6 +1,6 @@
 {
-  "appVersion": "22.12.1.0",
-  "versionCode": 369885440,
+  "appVersion": "22.13.1.1",
+  "versionCode": 369950981,
   "generatedBy": "tools/gen_anchors.py",
   "anchors": {
     "splash_forbid_b": {
@@ -16,12 +16,12 @@
     "home_ad_float": {
       "c": "com.baidu.tbadk.TbSingleton",
       "m": "getHomeAdFloatViewItemData",
-      "s": "()Lcom/baidu/tieba/fo6;"
+      "s": "()Lcom/baidu/tieba/po6;"
     },
     "pb_ad_float": {
       "c": "com.baidu.tbadk.TbSingleton",
       "m": "getPbAdFloatViewItemData",
-      "s": "()Lcom/baidu/tieba/fo6;"
+      "s": "()Lcom/baidu/tieba/po6;"
     },
     "template_set_list": {
       "c": "com.baidu.tieba.feed.list.TemplateAdapter",
@@ -71,12 +71,12 @@
     "rec_forum_strategy_h": {
       "c": "com.baidu.tieba.forum.strategy.RecommendForumShowStrategy",
       "m": "h",
-      "s": "(Lcom/baidu/tieba/y7a;)Z"
+      "s": "(Lcom/baidu/tieba/i8a;)Z"
     },
     "upgrade_pop": {
       "c": "com.baidu.tbadk.core.util.UpgradePopWindowHelper",
       "m": "showPopWindow",
-      "s": "(Lcom/baidu/tbadk/TbPageContext;Lcom/baidu/tieba/op6;)V"
+      "s": "(Lcom/baidu/tbadk/TbPageContext;Lcom/baidu/tieba/yp6;)V"
     },
     "easter_egg_o": {
       "c": "com.baidu.tieba.easteregg.EasterEggAdController",
@@ -96,15 +96,15 @@
     "forum_res_parser_a": {
       "c": "com.baidu.tieba.forum.data.protobuf.BaseForumResParser",
       "m": "a",
-      "s": "(Ljava/lang/Object;Lcom/baidu/tieba/ej9;Ljava/util/Map;ZLjava/util/Map;)Ljava/util/List;"
+      "s": "(Ljava/lang/Object;Lcom/baidu/tieba/vj9;Ljava/util/Map;ZLjava/util/Map;)Ljava/util/List;"
     },
     "nt9_d": {
-      "c": "com.baidu.tieba.nt9",
+      "c": "com.baidu.tieba.eu9",
       "m": "d",
       "s": "()Ljava/lang/Object;"
     },
     "nt9_b": {
-      "c": "com.baidu.tieba.nt9",
+      "c": "com.baidu.tieba.eu9",
       "m": "b",
       "s": "()Ljava/lang/String;"
     },
@@ -149,7 +149,7 @@
       "s": "()Lcom/baidu/tbadk/core/data/AlaInfoData;"
     },
     "em8_get_thread": {
-      "c": "com.baidu.tieba.em8",
+      "c": "com.baidu.tieba.tm8",
       "m": "getThreadData",
       "s": "()Lcom/baidu/tbadk/core/data/ThreadData;"
     },
@@ -160,11 +160,11 @@
     },
     "ala_live_card_bind": {
       "c": "com.baidu.tieba.compact.AlaLiveAttentionCardView",
-      "m": "c",
-      "s": "(Lcom/baidu/tieba/rl8;)V"
+      "m": "b",
+      "s": "(Lcom/baidu/tieba/gm8;)V"
     },
     "live_card_create": {
-      "c": "com.baidu.tieba.ssb",
+      "c": "com.baidu.tieba.nsb",
       "m": "a",
       "s": "(Landroid/view/ViewGroup;I)Landroid/view/View;"
     },
@@ -209,9 +209,9 @@
       "s": "(Lcom/baidu/nadcore/requester/RequestParameters;Lcom/baidu/nadcore/requester/NadRequester$b;)V"
     },
     "qy8_c": {
-      "c": "com.baidu.tieba.qy8",
+      "c": "com.baidu.tieba.fz8",
       "m": "c",
-      "s": "(Lcom/baidu/tieba/c18;Lcom/baidu/tieba/i18;)V"
+      "s": "(Lcom/baidu/tieba/r18;Lcom/baidu/tieba/x18;)V"
     },
     "add_lz": {
       "c": "com.baidu.tieba.pb.pagebrowser.net.PageBrowserRequestMessage",
@@ -243,6 +243,11 @@
       "m": "loadData",
       "s": "()Z"
     },
+    "retail_store_page": {
+      "c": "com.baidu.tbadk.abtest.UbsABTestHelper",
+      "m": "retailStorePage",
+      "s": "()Z"
+    },
     "clipboard": {
       "c": "com.baidu.tbadk.core.util.UtilHelper",
       "m": "getClipBoardContent",
@@ -259,12 +264,12 @@
       "s": "(Landroid/content/Context;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V"
     },
     "ad_insert_gate": {
-      "c": "com.baidu.tieba.dw7",
+      "c": "com.baidu.tieba.qw7",
       "m": "n",
       "s": "(Lcom/baidu/tieba/ad/AbsDataRecorder$Scene;)Z"
     },
     "ad_card_gate": {
-      "c": "com.baidu.tieba.bie",
+      "c": "com.baidu.tieba.ike",
       "m": "h",
       "s": "(Lcom/baidu/tbadk/core/data/AdvertAppInfo;)Z"
     },
@@ -272,20 +277,15 @@
       "c": "com.baidu.tieba.personTab.controller.PersonTabWebController",
       "m": "z",
       "s": "(Landroid/view/View;Landroid/os/Bundle;)V"
-    },
-    "retail_store_page": {
-      "c": "com.baidu.tbadk.abtest.UbsABTestHelper",
-      "m": "retailStorePage",
-      "s": "()Z"
     }
   },
   "classes": {
-    "nt9": "com.baidu.tieba.nt9",
+    "nt9": "com.baidu.tieba.eu9",
     "advert_app_info": "com.baidu.tbadk.core.data.AdvertAppInfo",
     "thread_data": "com.baidu.tbadk.core.data.ThreadData",
     "lego_ad_card": "com.baidu.tieba.recapp.lego.model.AdCard",
     "lego_ad_data": "com.baidu.tieba.oke",
-    "lego_ad_wrapper": "com.baidu.tieba.gje$a",
-    "live_thread_wrapper": "com.baidu.tieba.em8"
+    "lego_ad_wrapper": "com.baidu.tieba.nle$a",
+    "live_thread_wrapper": "com.baidu.tieba.tm8"
   }
 }

@@ -20,10 +20,10 @@ public class AnchorTableTest {
 
     @Test
     public void supportedVersionMatchesExactAndAllowsUnknown() {
-        assertTrue(AnchorTable.isSupportedVersion("22.12.1.0", "22.12.1.0"));
-        assertFalse(AnchorTable.isSupportedVersion("22.12.1.0", "22.11.0.0"));
+        assertTrue(AnchorTable.isSupportedVersion("22.13.1.1", "22.13.1.1"));
+        assertFalse(AnchorTable.isSupportedVersion("22.13.1.1", "22.11.0.0"));
         assertTrue("未知版本按 fail-open 处理",
-                AnchorTable.isSupportedVersion("22.12.1.0", null));
+                AnchorTable.isSupportedVersion("22.13.1.1", null));
     }
 
     @Test

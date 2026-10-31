@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 0.3.1 - 2026-10-31
+
+### 适配
+
+- **目标版本升到贴吧 22.13.1.1**（versionCode 369950981，APK 取自设备）：`ConfigStore.TARGET_VERSION`、README、版本门禁测试字面量同步更新。
+- **锚点全量重定位**：22.13.1.1 混淆名大洗牌且旧名被无关类复用，13 个方法锚点 + 1 个类锚点按结构指纹（方法表/父类/接口/字符串常量/调用方拓扑）重新定位，`tools/gen_anchors.py` 的 ANCHORS/CLASSES 表同步更新：
+  - nt9→eu9（feed 条目包装接口，b()/d() 结构不变）、em8→tm8（HomePageAlaLiveThreadAdapter 调用方证实）、ssb→nsb、qy8→fz8（getFeedAd URL + asyncAfd 双指纹）、c18→r18、i18→x18、dw7→qw7、bie→ike、gje$a→nle$a；
+  - 混淆参数/返回类型：fo6→po6、op6→yp6、y7a→i8a、ej9→vj9、rl8→gm8（AlaLiveAttentionCardView 绑定方法 c→b）。
+- `Phase2Features` 中硬编码的 `com.baidu.tieba.c18`/`i18` 同步改为 `r18`/`x18`。
+- 重跑 `gen_anchors`：55 方法 + 7 类全部命中（0 MISSING），`anchors.json` 写回（appVersion 22.13.1.1 / versionCode 369950981）。
+
+### 构建
+
+- 模块版本 0.3.0→0.3.1（versionCode 4→5）。
+
 ## 0.3.0 - 2026-10-30
 
 ### 新增

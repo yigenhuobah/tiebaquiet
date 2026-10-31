@@ -2,8 +2,8 @@
 
 基于 [libxposed API 102](https://repo.maven.apache.org/maven2/io/github/libxposed/) 的 LSPosed 模块，为百度贴吧（`com.baidu.tieba`）提供去广告、界面精简、功能增强与隐私保护。
 
-- 模块版本：**0.3.0**（versionCode 4）
-- 目标版本：百度贴吧 **22.12.1.0**（versionCode 369885440）
+- 模块版本：**0.3.1**（versionCode 5）
+- 目标版本：百度贴吧 **22.13.1.1**（versionCode 369950981）
 - 包名：`io.github.yigenhuobah.tiebaquiet`
 - 运行环境：LSPosed 2.1+ / Vector 2.2+（Zygisk），API 102
 - 仓库：<https://github.com/yigenhuobah/tiebaquiet> ｜ 反馈：[Issues](https://github.com/yigenhuobah/tiebaquiet/issues/new/choose)
@@ -68,7 +68,7 @@
 - **框架已连接**：作用域已勾选，但贴吧进程当前未注入（启动贴吧后生效）
 - **已激活**：贴吧进程已注入，显示框架 API 版本
 
-异常横幅只在两种情况下出现：贴吧版本不是 22.12.1.0，或已启用且明确失败的功能数 ≥ 2。框架未绑定时开关置灰，避免“改了没用”。
+异常横幅只在两种情况下出现：贴吧版本不是 22.13.1.1，或已启用且明确失败的功能数 ≥ 2。框架未绑定时开关置灰，避免“改了没用”。
 
 ## 诊断与关于
 
@@ -81,7 +81,7 @@
 2. 在 LSPosed 管理器中启用「贴吧静净」，作用域勾选「百度贴吧」。
 3. 强制停止并重新打开贴吧。
 
-要求：LSPosed 2.1+ / Vector 2.2+（Zygisk），libxposed API 102；百度贴吧 22.12.1.0。
+要求：LSPosed 2.1+ / Vector 2.2+（Zygisk），libxposed API 102；百度贴吧 22.13.1.1。
 
 ## 构建
 
@@ -124,15 +124,15 @@ python tools/gen_anchors.py --apk <新版本apk> --out app/src/main/resources/an
 
 ## 兼容性与风险
 
-- 仅声明支持 22.12.1.0；混淆类（`qy8` 等）通过字符串锚点在 `gen_anchors.py` 中定位，跨版本需重新生成。
+- 仅声明支持 22.13.1.1；混淆类（`fz8` 等）通过字符串锚点在 `gen_anchors.py` 中定位，跨版本需重新生成。
 - 贴吧业务方法普遍带 Titan 热修桩（`$ic`）。模块遵循：优先 replace/after，before 不 return，不 hook clinit/构造器。
 - 已知暴露面：贴吧内置 sofire/weapon 等检测会随请求上报 Xposed 环境特征；本模块不做任何检测绕过，只减少主动触碰（不 hook 框架方法、不碰签名/发送层、不做设备号伪造）。
 - “启动任务精简”曾 hook `LaunchTask.run()`，但它是所有启动任务的模板方法，跳过会导致 Fresco 图片管线未初始化、贴吧启动即闪退，已移除。
 - 修改开关后需要强制停止并重新打开贴吧生效（RemotePreferences 在进程启动时读取）。
 
-### 已知限制（0.3.0）
+### 已知限制（0.3.1）
 
-- **22.13.1.1 未适配**：2026-10-30 设备自动升级到 22.13.1.1，模块按 best-effort 继续挂载；UI-04 已验证可用，其余功能未逐项复验，正式支持仍为 22.12.1.0。
+- **22.13.1.1 锚点已重生成，未逐项真机复验**：2026-10-31 基于 22.13.1.1（versionCode 369950981）APK 重新定位 14 处混淆锚点并重生成 anchors.json（55 方法 + 7 类全命中，0 MISSING）；功能行为未逐项真机回归。
 
 - **一键签到需 EN-08 开启**：关闭 EN-08 时接收器忽略签到广播，设置页按钮提示“请先开启”；点击按钮不再静默改写开关。
 - **签到页可打开，但本账号无法完成签到**：2026-10-29 真机（0.2.1）已触发并打开贴吧签到页；页面提示「吧内等级 7 级以上才可使用」，当前账号各吧为 1–6 级，因此没有实际完成签到。这是贴吧的账号等级门槛，不是模块失败。

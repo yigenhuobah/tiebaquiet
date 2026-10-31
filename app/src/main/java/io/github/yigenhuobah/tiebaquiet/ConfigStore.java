@@ -32,7 +32,7 @@ public final class ConfigStore {
 
     /** 目标应用包名；<queries> 已声明，Android 11+ 才能读到版本与 UID。 */
     public static final String TARGET_PACKAGE = "com.baidu.tieba";
-    public static final String TARGET_VERSION = "22.12.1.0";
+    public static final String TARGET_VERSION = "22.13.1.1";
 
     private static final String TAG = "TiebaQuiet";
 

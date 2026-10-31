@@ -124,9 +124,9 @@ public final class Phase2Features {
                             Object callback = args.size() > 1 ? args.get(1) : null;
                             try {
                                 Class<?> requestClass = env.loader.loadClass(
-                                        "com.baidu.tieba.c18");
+                                        "com.baidu.tieba.r18");
                                 Class<?> iface = env.loader.loadClass(
-                                        "com.baidu.tieba.i18");
+                                        "com.baidu.tieba.x18");
                                 iface.getMethod("c", requestClass, int.class, String.class)
                                         .invoke(callback, request, Integer.valueOf(0), "blocked");
                             } catch (Throwable ignored) {
