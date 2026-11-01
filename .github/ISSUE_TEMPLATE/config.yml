@@ -6,3 +6,6 @@ contact_links:
   - name: 兼容性与已知限制
     url: https://github.com/yigenhuobah/tiebaquiet#兼容性与风险
     about: 确认贴吧版本在适配范围内，以及 0.2.1 的已知限制
+  - name: 参与开发 / 提交代码
+    url: https://github.com/yigenhuobah/tiebaquiet/blob/main/CONTRIBUTING.md
+    about: 只接受源码 PR；构建、测试、代码约定与 Feature 编号规则见这里
