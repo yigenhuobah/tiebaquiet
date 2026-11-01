@@ -112,6 +112,26 @@ public class StatusProviderTest {
                 NOW - 1L, NOW));
     }
 
+    /** crash0/1/2 是固定诊断键：出现在回传里不参与失败统计，也不能被当成功能键。 */
+    @Test
+    public void crashKeysDoNotAffectFailureCount() {
+        Map<String, String> report = failing("splash_no_ad");
+        report.put(ReportProtocol.KEY_CRASH_0, "1000|main|java.lang.NullPointerException");
+        report.put(ReportProtocol.KEY_CRASH_1, "");
+        report.put(ReportProtocol.KEY_CRASH_2, "");
+        assertEquals("带 crash 键的回传不改变失败统计",
+                1, StatusProvider.countFailed(enabled("splash_no_ad"), report, NOW - 1L, NOW));
+        assertEquals("只有 crash 键时没有任何功能回传，不计失败",
+                0, StatusProvider.countFailed(enabled("splash_no_ad"),
+                        reportOnlyCrashes(), NOW - 1L, NOW));
+    }
+
+    private static Map<String, String> reportOnlyCrashes() {
+        Map<String, String> report = new HashMap<>();
+        report.put(ReportProtocol.KEY_CRASH_0, "1000|main|java.lang.NullPointerException");
+        return report;
+    }
+
     private static Set<String> enabled(String... keys) {
         Set<String> set = new HashSet<>();
         for (String key : keys) {

@@ -103,6 +103,9 @@ public class TiebaQuietModule extends XposedModule {
         SignInFeature.installAlways(env);
         // 诊断回传只在主进程启动。
         Report.start();
+        // 内置诊断：幂等包装默认 UEH 记录目标进程最近崩溃（先写崩溃再透传 previous，
+        // 绝不改变贴吧原有的异常处理行为）；install 完成与 Report.start 同点接入。
+        Report.installCrashHandler();
         log(Log.INFO, TAG, "ready: " + ok + " installed, " + skipped
                 + " skipped, target=" + anchors.getAppVersion());
     }

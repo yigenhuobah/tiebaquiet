@@ -4,7 +4,9 @@ import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageInfo;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.format.DateFormat;
 import android.widget.Toast;
@@ -14,6 +16,8 @@ import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceScreen;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -136,6 +140,8 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
             screen.addPreference(empty);
         }
 
+        addCrashSection(screen, snapshot.crashes);
+
         Preference refresh = new Preference(requireContext());
         refresh.setTitle(R.string.diag_refresh);
         refresh.setSummary(getString(R.string.diag_refresh_summary, refreshTime()));
@@ -153,6 +159,65 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
             return true;
         });
         screen.addPreference(copy);
+
+        // 新文案无法进 strings.xml（不在本次修复的文件清单内），用字面量并在此说明。
+        Preference export = new Preference(requireContext());
+        export.setTitle("导出诊断包");
+        export.setSummary("系统分享诊断文本：版本/系统/框架 API/目标版本/功能状态/最近命中/最近崩溃");
+        export.setOnPreferenceClickListener(p -> {
+            exportDiagnostics();
+            return true;
+        });
+        screen.addPreference(export);
+    }
+
+    /** 最近崩溃区（crash0 最新）：无崩溃时不显示。 */
+    private void addCrashSection(PreferenceScreen screen, List<String> crashes) {
+        PreferenceCategory category = null;
+        for (int i = 0; i < crashes.size() && i < 3; i++) {
+            String crash = crashes.get(i);
+            if (crash == null || crash.isEmpty()) {
+                continue;
+            }
+            if (category == null) {
+                category = new PreferenceCategory(requireContext());
+                category.setTitle("最近崩溃");
+                screen.addPreference(category);
+            }
+            category.addPreference(crashRow(crash));
+        }
+    }
+
+    /** 崩溃行：标题为格式化时间，摘要为线程/异常/栈帧明细（首段解析失败则整行原文）。 */
+    private Preference crashRow(String crash) {
+        Preference p = new Preference(requireContext());
+        String title = crash;
+        String detail = crash;
+        int sep = crash.indexOf('|');
+        if (sep > 0) {
+            try {
+                long ms = Long.parseLong(crash.substring(0, sep));
+                title = DateFormat.getTimeFormat(requireContext()).format(new Date(ms));
+                detail = crash.substring(sep + 1);
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        p.setTitle(title);
+        p.setSummary(detail);
+        p.setSelectable(false);
+        return p;
+    }
+
+    /** 最近崩溃文本（crashN 原文逐行）；无崩溃返回空串。 */
+    private static String crashText(List<String> crashes) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < crashes.size() && i < 3; i++) {
+            String crash = crashes.get(i);
+            if (crash != null && !crash.isEmpty()) {
+                sb.append("crash").append(i).append(' ').append(crash).append('\n');
+            }
+        }
+        return sb.toString();
     }
 
     private Preference row(Feature f, RowData data) {
@@ -197,6 +262,10 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
             sb.append(f.code).append(' ').append(getString(f.titleRes))
                     .append(": ").append(summary(f, snapshot.rows.get(f.key))).append('\n');
         }
+        String crashes = crashText(snapshot.crashes);
+        if (!crashes.isEmpty()) {
+            sb.append("最近崩溃:\n").append(crashes);
+        }
         try {
             ClipboardManager cm = (ClipboardManager) requireContext()
                     .getSystemService(Context.CLIPBOARD_SERVICE);
@@ -206,6 +275,103 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
             }
         } catch (Throwable ignored) {
             // 剪贴板不可用不阻塞诊断页。
+        }
+    }
+
+    /**
+     * 导出诊断包：聚合模块版本/系统版本/框架 API/目标版本/各功能状态/最近命中/
+     * 最近崩溃为一段文本，ACTION_SEND text/plain 系统分享——不写文件、不依赖
+     * FileProvider。分享面板拉不起来只弹 Toast，不阻塞诊断页。
+     */
+    private void exportDiagnostics() {
+        Snapshot snapshot = mSnapshot;
+        if (snapshot == null) {
+            // 首次加载还没回来：触发一次刷新，本次不导出半成品。
+            rebuild();
+            return;
+        }
+        try {
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType("text/plain");
+            send.putExtra(Intent.EXTRA_TEXT, buildExportText(snapshot));
+            startActivity(Intent.createChooser(send, "导出诊断包"));
+        } catch (Throwable ignored) {
+            Toast.makeText(requireContext(), "诊断包导出失败", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private String buildExportText(Snapshot snapshot) {
+        StringBuilder header = new StringBuilder();
+        header.append(getString(R.string.app_name)).append(' ')
+                .append(versionName()).append('\n');
+        header.append("系统: Android ").append(Build.VERSION.RELEASE)
+                .append(" (API ").append(Build.VERSION.SDK_INT).append(")\n");
+        header.append("框架 API: ").append(frameworkApi()).append('\n');
+        header.append("目标版本: ").append(targetVersion()).append('\n');
+        header.append(getString(R.string.diag_header, refreshTime()));
+
+        List<String> featureLines = new ArrayList<>();
+        for (Feature f : FeatureRegistry.all()) {
+            featureLines.add(f.code + " " + getString(f.titleRes) + ": "
+                    + summary(f, snapshot.rows.get(f.key)));
+        }
+        List<String> hitLines = new ArrayList<>();
+        for (Feature f : FeatureRegistry.all()) {
+            RowData data = snapshot.rows.get(f.key);
+            long hit = data != null ? data.hit : 0L;
+            if (hit > 0) {
+                hitLines.add(f.code + " " + getString(f.titleRes) + ": hit " + hit);
+            }
+        }
+        return joinExportText(header.toString(), featureLines, hitLines,
+                crashText(snapshot.crashes), getString(R.string.diag_no_data));
+    }
+
+    /**
+     * 导出文本的纯拼装（无 Android 依赖，静态包级可见供 JVM 单测锁定关键段，
+     * 见 ReportProtocolTest）：headerBlock 为版本/系统/框架 API/目标版本/数据时间，
+     * 功能状态/最近命中/最近崩溃三个段按固定顺序追加，空段用 noData 占位。
+     */
+    static String joinExportText(String headerBlock, List<String> featureLines,
+            List<String> hitLines, String crashBlock, String noData) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(headerBlock);
+        sb.append("\n[功能状态]\n");
+        for (String line : featureLines) {
+            sb.append(line).append('\n');
+        }
+        sb.append("\n[最近命中]\n");
+        if (hitLines.isEmpty()) {
+            sb.append(noData).append('\n');
+        } else {
+            for (String line : hitLines) {
+                sb.append(line).append('\n');
+            }
+        }
+        sb.append("\n[最近崩溃]\n");
+        sb.append(crashBlock.isEmpty() ? noData + '\n' : crashBlock);
+        return sb.toString();
+    }
+
+    /** Xposed 框架 API 版本（模块 App 进程经 XposedService 绑定得知）；未绑定返回提示。 */
+    private String frameworkApi() {
+        try {
+            io.github.libxposed.service.XposedService service = ServiceBridge.get();
+            return service != null ? String.valueOf(service.getApiVersion()) : "未绑定";
+        } catch (Throwable t) {
+            return "?";
+        }
+    }
+
+    /** 目标应用（百度贴吧）版本；未安装或查询失败返回提示。 */
+    private String targetVersion() {
+        try {
+            PackageInfo info = requireContext().getPackageManager()
+                    .getPackageInfo(ConfigStore.TARGET_PACKAGE, 0);
+            String version = info.versionName != null ? info.versionName : "?";
+            return version + " (" + info.versionCode + ")";
+        } catch (Throwable t) {
+            return "未安装";
         }
     }
 
@@ -258,7 +424,15 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
         }
         String version = cachedVersion != null
                 ? cachedVersion : queryVersionName(context, context.getPackageName());
-        return new Snapshot(refreshedAt, version, rows, hasData);
+        // 最近崩溃（crash0 最新）：与功能行共用同一次后台读取；TTL 过期也照常展示，
+        // 崩溃是历史证据，仍可导入诊断包排查。
+        List<String> crashes = new ArrayList<>(3);
+        for (int i = 0; i < 3; i++) {
+            String crash = StatusProvider.reportCrash(context, i);
+            crashes.add(crash != null ? crash : "");
+        }
+        return new Snapshot(refreshedAt, version, rows, hasData,
+                Collections.unmodifiableList(crashes));
     }
 
     private static String queryVersionName(Context context, String packageName) {
@@ -305,13 +479,16 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
         final String versionName;
         final Map<String, RowData> rows;
         final boolean hasData;
+        /** 最近崩溃（crash0 最新，最多 3 条，无崩溃为空串）；复制/导出与崩溃区共用。 */
+        final List<String> crashes;
 
         Snapshot(long refreshedAt, String versionName, Map<String, RowData> rows,
-                 boolean hasData) {
+                 boolean hasData, List<String> crashes) {
             this.refreshedAt = refreshedAt;
             this.versionName = versionName;
             this.rows = rows;
             this.hasData = hasData;
+            this.crashes = crashes;
         }
     }
 }

@@ -2,11 +2,15 @@ package io.github.yigenhuobah.tiebaquiet.hooks;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -19,14 +23,16 @@ import io.github.yigenhuobah.tiebaquiet.ReportProtocol;
  * Report 的快照完整性与回传节流规则。
  *
  * <p>快照：reg/skip/crit 对每个 touched Feature 都必须存在（可为空串），hit 只在
- * &gt; 0 时出现；每次发送带 meta.session / meta.updated_at。
+ * &gt; 0 时出现；crash0/1/2（0 最新）始终存在，无崩溃为空串；每次发送带
+ * meta.session / meta.updated_at。
  *
  * <p>节流：内容变化立即发；内容不变时按 5 分钟心跳重发。只有回传成功（provider
  * 非 null，即 commit 成功）才更新 sLast/sLastSentAt；provider 失败时调用方保持旧值，
  * 同一快照仍会被判定为待发送。比较时必须剔除 meta 键，否则时间戳每轮变化都会
  * 让心跳失效。这里用纯函数覆盖该契约，不依赖 Android / Robolectric。
  *
- * <p>HookState 是进程级静态状态：每个快照用例使用不同 Feature，避免互相污染。
+ * <p>HookState 与崩溃环都是进程级静态状态：每个快照用例使用不同 Feature，
+ * 崩溃环用例各自先写入再读取，避免互相污染。
  */
 public class ReportTest {
 
@@ -156,6 +162,117 @@ public class ReportTest {
         assertEquals("方法未找到 x", snap.get(ReportProtocol.PREFIX_SKIP + f.key));
         assertEquals("部分锚点缺失不能标 critical", "",
                 snap.get(ReportProtocol.PREFIX_CRIT + f.key));
+    }
+
+    /** crash0/1/2 必须始终出现在快照里：无崩溃时为空串（覆盖清掉旧会话残留）。 */
+    @Test
+    public void snapshotAlwaysCarriesThreeCrashKeys() {
+        Map<String, String> snap = Report.snapshot();
+
+        assertTrue("crash0 必须回传", snap.containsKey(ReportProtocol.KEY_CRASH_0));
+        assertTrue("crash1 必须回传", snap.containsKey(ReportProtocol.KEY_CRASH_1));
+        assertTrue("crash2 必须回传", snap.containsKey(ReportProtocol.KEY_CRASH_2));
+        for (int i = 0; i < 3; i++) {
+            String value = snap.get("crash" + i);
+            assertNotNull(value);
+            assertTrue("crash 值必须通过回传长度校验", ReportProtocol.isValidValue(value));
+        }
+    }
+
+    /** 崩溃环：最新在前、最多 3 条，新的顶掉最旧的。 */
+    @Test
+    public void crashRingKeepsLatestThreeNewestFirst() {
+        Report.recordCrash(new Thread("tb-crash-t1"), new RuntimeException("one"));
+        Report.recordCrash(new Thread("tb-crash-t2"), new RuntimeException("two"));
+        Report.recordCrash(new Thread("tb-crash-t3"), new RuntimeException("three"));
+        Report.recordCrash(new Thread("tb-crash-t4"), new RuntimeException("four"));
+
+        Map<String, String> snap = Report.snapshot();
+
+        assertTrue("crash0 是最新一条",
+                snap.get(ReportProtocol.KEY_CRASH_0).contains("|tb-crash-t4|"));
+        assertTrue(snap.get(ReportProtocol.KEY_CRASH_1).contains("|tb-crash-t3|"));
+        assertTrue("第 4 条新崩溃顶掉了第 1 条",
+                !snap.get(ReportProtocol.KEY_CRASH_2).contains("|tb-crash-t1|"));
+        assertTrue(snap.get(ReportProtocol.KEY_CRASH_2).contains("|tb-crash-t2|"));
+    }
+
+    /** 崩溃记录格式：时间（epoch 毫秒）|线程名|异常类名|栈前 2 帧。 */
+    @Test
+    public void crashEntryFormatCarriesTimeThreadClassAndTwoFrames() {
+        RuntimeException boom = new RuntimeException("format");
+        // 换成受控短栈帧：JUnit 反射栈太长会被 240 截断，无法逐段断言。
+        boom.setStackTrace(new StackTraceElement[]{
+                new StackTraceElement("com.a.B", "d", "B.java", 1),
+                new StackTraceElement("com.e.F", "h", "F.java", 2)});
+        Report.recordCrash(new Thread("tb-crash-fmt"), boom);
+
+        String crash0 = Report.snapshot().get(ReportProtocol.KEY_CRASH_0);
+        String[] parts = crash0.split("\\|", -1);
+
+        assertEquals("时间|线程|异常类名|帧1|帧2 共 5 段", 5, parts.length);
+        long ts = Long.parseLong(parts[0]);
+        assertTrue("首段必须是当前毫秒时间",
+                Math.abs(System.currentTimeMillis() - ts) < 60_000L);
+        assertEquals("tb-crash-fmt", parts[1]);
+        assertEquals("java.lang.RuntimeException", parts[2]);
+        assertEquals("栈前 2 帧按 getStackTrace() 顺序拼接",
+                "com.a.B.d(B.java:1)|com.e.F.h(F.java:2)", parts[3] + "|" + parts[4]);
+    }
+
+    /** 单条截断 ≤240（MAX_VALUE=256 之内）：超长线程名只保留前 240 个字符。 */
+    @Test
+    public void crashEntryTruncatedTo240Chars() {
+        Report.recordCrash(new Thread("x".repeat(300)), new RuntimeException("trunc"));
+
+        String crash0 = Report.snapshot().get(ReportProtocol.KEY_CRASH_0);
+
+        assertEquals("单条崩溃必须截断到 240 字符", 240, crash0.length());
+        assertTrue("截断结果必须通过回传值长度校验", ReportProtocol.isValidValue(crash0));
+    }
+
+    /** 防御：null 线程 / null 异常不得抛出（UEH 内任何异常都会破坏原有处理链）。 */
+    @Test
+    public void recordCrashToleratesNullThreadAndThrowable() {
+        Report.recordCrash(null, null);
+
+        String crash0 = Report.snapshot().get(ReportProtocol.KEY_CRASH_0);
+        assertNotNull("null 输入也要落一条占位记录", crash0);
+        assertTrue("线程名/异常类名缺失时以 ? 占位", crash0.endsWith("|?"));
+    }
+
+    /**
+     * UEH 包装：幂等（static boolean 只包一次）、先记录崩溃再透传 previous；
+     * previous 的异常处理行为不被改变（透传后原样交回）。
+     */
+    @Test
+    public void crashHandlerWrapsPreviousOnceAndForwards() {
+        Thread.UncaughtExceptionHandler original = Thread.getDefaultUncaughtExceptionHandler();
+        try {
+            List<Throwable> forwarded = new ArrayList<>();
+            Thread.UncaughtExceptionHandler previous = (t, e) -> forwarded.add(e);
+            Thread.setDefaultUncaughtExceptionHandler(previous);
+
+            Report.installCrashHandler();
+            Thread.UncaughtExceptionHandler wrapped = Thread.getDefaultUncaughtExceptionHandler();
+            assertNotNull("必须替换默认 UEH", wrapped);
+            assertNotSame("默认 UEH 必须被包装", previous, wrapped);
+
+            Report.installCrashHandler();
+            assertSame("静态 boolean 必须保证只包一次", wrapped,
+                    Thread.getDefaultUncaughtExceptionHandler());
+
+            RuntimeException boom = new RuntimeException("wrapped");
+            wrapped.uncaughtException(Thread.currentThread(), boom);
+
+            assertEquals("previous 必须被透传", 1, forwarded.size());
+            assertSame("透传的必须是原始异常", boom, forwarded.get(0));
+            assertTrue("崩溃必须先落进快照",
+                    Report.snapshot().get(ReportProtocol.KEY_CRASH_0)
+                            .contains("java.lang.RuntimeException"));
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(original);
+        }
     }
 
     @Test

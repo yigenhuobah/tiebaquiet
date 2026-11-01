@@ -9,6 +9,8 @@ import android.content.SharedPreferences;
 
 import org.junit.Test;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -39,7 +41,8 @@ public class ReportProtocolTest {
             count += 4;
         }
         count += 2; // meta.session / meta.updated_at
-        assertEquals(102, count);
+        count += 3; // crash0 / crash1 / crash2
+        assertEquals(105, count);
     }
 
     @Test
@@ -52,6 +55,22 @@ public class ReportProtocolTest {
         assertTrue(ReportProtocol.validKey(ReportProtocol.KEY_META_UPDATED_AT));
         assertFalse(ReportProtocol.validKey("meta.unknown"));
         assertFalse(ReportProtocol.validKey("crit."));
+        assertFalse(ReportProtocol.validKey("crash3"));
+        assertFalse(ReportProtocol.validKey("crash"));
+    }
+
+    /** crash 回传键：固定键名白名单放行，单条值仍受 MAX_VALUE=256 上限（生产端截 240）。 */
+    @Test
+    public void crashKeysAreWhitelistedAndValueCapped() {
+        assertEquals("crash0", ReportProtocol.KEY_CRASH_0);
+        assertEquals("crash1", ReportProtocol.KEY_CRASH_1);
+        assertEquals("crash2", ReportProtocol.KEY_CRASH_2);
+        assertTrue(ReportProtocol.validKey(ReportProtocol.KEY_CRASH_0));
+        assertTrue(ReportProtocol.validKey(ReportProtocol.KEY_CRASH_1));
+        assertTrue(ReportProtocol.validKey(ReportProtocol.KEY_CRASH_2));
+        assertTrue(ReportProtocol.isValidValue("c".repeat(240)));
+        assertTrue(ReportProtocol.isValidValue("c".repeat(256)));
+        assertFalse("crash 键不豁免 256 上限", ReportProtocol.isValidValue("c".repeat(257)));
     }
 
     @Test
@@ -148,22 +167,16 @@ public class ReportProtocolTest {
         assertFalse("非正 TTL 视为不新鲜", ReportProtocol.isFresh(now, now, 0L));
     }
 
+    /**
+     * 会话身份比较（无 isStaleSession 整批丢弃路径）：只有“相同/不同”两种关系。
+     * 不同即新会话（清库后接受）；无 session 的旧版回传按同会话兼容合并，
+     * 绝不能被判成“丢弃/清库”。
+     */
     @Test
-    public void sessionComparisonRejectsStaleWrites() {
-        // 无已存会话：带 session 的首次回传算新会话；旧版无 session 不算新。
+    public void sessionComparisonUsesIdentityNotOrdering() {
+        // 无已存会话：带 session 的首次回传算新会话。
         assertTrue(ReportProtocol.isNewSession(null, "200"));
         assertTrue(ReportProtocol.isNewSession("", "200"));
-        assertFalse(ReportProtocol.isNewSession(null, null));
-        assertFalse(ReportProtocol.isNewSession("100", "100"));
-
-        // 无会话标识的旧版回传必须整批丢弃；带 session 的批次不再按毫秒比大小。
-        assertTrue("旧版回传没有 session 也算迟到", ReportProtocol.isStaleSession("200", null));
-        assertTrue(ReportProtocol.isStaleSession("200", ""));
-        assertFalse("带 session 的批次不算迟到，身份不同交给清库后接受",
-                ReportProtocol.isStaleSession("200", "100"));
-        assertFalse(ReportProtocol.isStaleSession("200", "200"));
-        assertFalse(ReportProtocol.isStaleSession("200", "300"));
-        assertFalse(ReportProtocol.isStaleSession(null, "100"));
 
         // 身份比较：不同即新会话，与数值大小无关。
         assertTrue(ReportProtocol.isNewSession("100", "200"));
@@ -171,6 +184,16 @@ public class ReportProtocolTest {
                 ReportProtocol.isNewSession("200", "100"));
         assertTrue("不同格式字符串同样视为新会话",
                 ReportProtocol.isNewSession("abc", "xyz"));
+
+        // 同会话重复上报不触发清库。
+        assertFalse(ReportProtocol.isNewSession("100", "100"));
+
+        // 缺失 session 的旧版回传：同会话兼容合并进当前数据，不得触发新会话清库。
+        assertFalse("无 session 的回传不能触发新会话清库",
+                ReportProtocol.isNewSession("200", null));
+        assertFalse("空 session 同样按同会话兼容处理",
+                ReportProtocol.isNewSession("200", ""));
+        assertFalse(ReportProtocol.isNewSession(null, null));
         assertFalse(ReportProtocol.isNewSession("", null));
     }
 
@@ -184,12 +207,12 @@ public class ReportProtocolTest {
         String rolledBack = "s1690000000000-bbbb2222";
         assertTrue("回拨后毫秒值更小，但身份不同必须按新会话接受",
                 ReportProtocol.isNewSession(stored, rolledBack));
-        assertFalse("不得再按 incoming < stored 整批丢弃",
-                ReportProtocol.isStaleSession(stored, rolledBack));
+        assertTrue("身份相同则仍是同一会话",
+                !ReportProtocol.isNewSession(rolledBack, rolledBack));
     }
 
     /**
-     * 未来时间戳/时钟回拨：updatedAt 领先超过 {@link ReportProtocol#FUTURE_GRACE_MS}
+     * 未来时间戳/时钟回拨：updatedAt 领先超过 {@link ReportProtocol#MAX_FUTURE_SKEW_MS}
      * （5 分钟）视为过期，不再当新鲜；5 分钟内的小幅偏差仍按新鲜处理。
      */
     @Test
@@ -197,9 +220,9 @@ public class ReportProtocolTest {
         long now = 10_000_000L;
         long ttl = ReportProtocol.DEFAULT_TTL_MS;
         assertTrue("5 分钟内的未来时间戳仍按新鲜处理",
-                ReportProtocol.isFresh(now + ReportProtocol.FUTURE_GRACE_MS, now, ttl));
+                ReportProtocol.isFresh(now + ReportProtocol.MAX_FUTURE_SKEW_MS, now, ttl));
         assertFalse("时钟回拨/未来时间戳超过 5 分钟视为过期",
-                ReportProtocol.isFresh(now + ReportProtocol.FUTURE_GRACE_MS + 1L, now, ttl));
+                ReportProtocol.isFresh(now + ReportProtocol.MAX_FUTURE_SKEW_MS + 1L, now, ttl));
         assertFalse("回拨量远超 TTL 也必须过期",
                 ReportProtocol.isFresh(now + ttl + 1L, now, ttl));
     }
@@ -216,19 +239,15 @@ public class ReportProtocolTest {
                 ReportProtocol.isNewSession("s1700000000000-aaaa1111", "1700000000001"));
         assertFalse("旧格式与已存数值完全相同仍是同一会话",
                 ReportProtocol.isNewSession("1700000000000", "1700000000000"));
-        assertFalse(ReportProtocol.isStaleSession("1700000000000", "1700000000000"));
-        assertFalse("数值更小的旧格式不算迟到",
-                ReportProtocol.isStaleSession("1700000000000", "1699999000000"));
         assertTrue("数值更小的旧格式仍是新会话（时钟回拨）",
                 ReportProtocol.isNewSession("1700000000000", "1699999000000"));
     }
 
-    /** 同会话重复上报：既不触发清库，也不算迟到，hit 由 provider 按最大值合并。 */
+    /** 同会话重复上报：不触发清库，hit 由 provider 按最大值合并。 */
     @Test
     public void sameSessionRepeatedReportsKeepMerging() {
         String session = "s1700000000000-aaaa1111";
         assertFalse(ReportProtocol.isNewSession(session, session));
-        assertFalse(ReportProtocol.isStaleSession(session, session));
         assertEquals("同会话重复上报 hit 取最大", 7L, ReportProtocol.mergeHit(3L, 7L));
         assertEquals("更大历史值不被较小值覆盖", 9L, ReportProtocol.mergeHit(9L, 7L));
     }
@@ -279,6 +298,82 @@ public class ReportProtocolTest {
                 ReportProtocol.mergeHit(7L, 0L));
         assertEquals("空 skip 写入后不再计入失败",
                 0, StatusProvider.countFailed(enabled(feature), reportView(sp), now - 1L, now));
+    }
+
+    /**
+     * 无 session 的旧版回传（旧版目标进程不带 meta.session）：按同会话兼容合并进
+     * 当前数据——provider 侧 isNewSession(stored, null) 为 false 不清库，写入本体
+     * {@link StatusProvider#applyEntries} 以 newSession=false 走正常合并路径。
+     *
+     * <p>回归信号：若有人恢复“无 session 整批丢弃/清库”的旧语义，本批数据不会
+     * 落进已存会话（accepted 仍正确，但旧 reg/hit 被清掉），hit 归零断言失败。
+     */
+    @Test
+    public void legacyBatchWithoutSessionMergesIntoCurrentData() {
+        String feature = "splash_no_ad";
+        String regKey = ReportProtocol.PREFIX_REG + feature;
+        String hitKey = ReportProtocol.PREFIX_HIT + feature;
+        FakeReportPrefs sp = new FakeReportPrefs();
+        // 已存会话的当前数据：reg 标签 + hit 计数。
+        sp.strings.put("v:" + regKey, "old_label");
+        sp.strings.put("v:" + hitKey, 7L);
+        // 另一个功能的数据必须在合并时保持不动（无清库）。
+        String otherRegKey = ReportProtocol.PREFIX_REG + "feed_ad_filter";
+        sp.strings.put("v:" + otherRegKey, "other_label");
+
+        // 旧版回传：不带 meta.session，newSession=false（即 isNewSession(stored, null)）。
+        String[] keys = {regKey, hitKey};
+        String[] values = {"new_label", "0"};
+        int accepted = StatusProvider.applyEntries(sp, sp.edit(), keys, values, false);
+
+        assertEquals("合法键值必须全部接受（同会话兼容，不整批丢弃）", 2, accepted);
+        assertEquals("最新 reg 覆盖旧标签", "new_label", sp.strings.get("v:" + regKey));
+        assertEquals("无 session 合并不清库：hit 历史最大值保留", 7L, sp.strings.get("v:" + hitKey));
+        assertEquals("其它功能数据不受影响", "other_label", sp.strings.get("v:" + otherRegKey));
+    }
+
+    /**
+     * 导出诊断包文本的纯拼装（{@link DiagnosticsFragment#joinExportText}）：
+     * 锁定 模块版本/系统/框架 API/目标版本/功能状态/最近命中/最近崩溃 关键段
+     * 齐全且顺序稳定。Fragment 的 Android 依赖无法在 JVM 构造，与协议同层的
+     * 静态拼装逻辑放在这里直接测。
+     */
+    @Test
+    public void exportTextContainsAllKeySections() {
+        String text = DiagnosticsFragment.joinExportText(
+                "贴吧静净 0.3.2\n系统: Android 15 (API 35)\n框架 API: 102\n"
+                        + "目标版本: 17.02.0.0 (1702000000)\n数据来自目标进程回传 · 刷新时间 12:00",
+                Collections.singletonList("AD-01 启动页广告: registered · hit 3 · skip —"),
+                Collections.singletonList("AD-01 启动页广告: hit 3"),
+                "crash0 1000|main|java.lang.NullPointerException|a.B.d(B.java:1)|e.F.h(F.java:2)\n",
+                "—");
+
+        assertTrue(text.contains("贴吧静净 0.3.2"));
+        assertTrue("必须含系统版本段", text.contains("系统: Android 15 (API 35)"));
+        assertTrue("必须含框架 API 段", text.contains("框架 API: 102"));
+        assertTrue("必须含目标版本段", text.contains("目标版本: 17.02.0.0 (1702000000)"));
+        assertTrue("必须含功能状态段", text.contains("[功能状态]\n"
+                + "AD-01 启动页广告: registered · hit 3 · skip —\n"));
+        assertTrue("必须含最近命中段", text.contains("[最近命中]\n"
+                + "AD-01 启动页广告: hit 3\n"));
+        assertTrue("必须含最近崩溃段", text.contains("[最近崩溃]\n"
+                + "crash0 1000|main|java.lang.NullPointerException|a.B.d(B.java:1)|e.F.h(F.java:2)\n"));
+        assertTrue("关键段顺序必须稳定：功能状态 < 最近命中 < 最近崩溃",
+                text.indexOf("[功能状态]") < text.indexOf("[最近命中]")
+                        && text.indexOf("[最近命中]") < text.indexOf("[最近崩溃]"));
+    }
+
+    /** 导出文本空数据段：最近命中/最近崩溃无数据时以 noData 占位，无崩溃不出现 crash 行。 */
+    @Test
+    public void exportTextUsesNoDataMarkerForEmptySections() {
+        String text = DiagnosticsFragment.joinExportText("贴吧静净 0.3.2",
+                Arrays.asList("AD-01 启动页广告: —"),
+                Collections.emptyList(), "", "—");
+
+        assertTrue(text.contains("[功能状态]\nAD-01 启动页广告: —\n"));
+        assertTrue("最近命中无数据必须占位", text.contains("[最近命中]\n—\n"));
+        assertTrue("最近崩溃无数据必须占位", text.contains("[最近崩溃]\n—\n"));
+        assertFalse("无崩溃时不得出现 crash 行", text.contains("crash0"));
     }
 
     /** 把 FakeReportPrefs 的落盘内容（带 v: 前缀）转成 countFailed 的 report 视图。 */

@@ -27,7 +27,8 @@ import java.util.Set;
  * value 有长度上限。不存任何用户内容、账号、设备标识或业务数据。
  *
  * <p>会话语义（身份比较）：会话标识不同即新会话，首次写入前清掉上一会话的
- * reg/hit/skip/crit；没有会话标识的旧版回传整批丢弃，不能覆盖新会话。
+ * reg/hit/skip/crit；没有会话标识的旧版回传按同会话兼容合并进当前数据
+ * （模块 App 与目标进程可各自升级）。
  * 超过 {@link ReportProtocol#DEFAULT_TTL_MS} 没有新回传的数据视为过期，
  * 失败计数按 0（未知）处理，避免旧会话长期误报横幅。
  */
@@ -89,7 +90,8 @@ public final class StatusProvider extends ContentProvider {
         }
         SharedPreferences sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
 
-        // 先看本批携带的会话标识：无会话标识的旧版回传整批丢弃；会话身份不同先清掉旧数据。
+        // 先看本批携带的会话标识：无会话标识的旧版回传按同会话兼容合并进当前数据；
+        // 会话身份不同（isNewSession）先清掉旧数据。
         String incomingSession = null;
         for (int i = 0; i < keys.length; i++) {
             if (ReportProtocol.KEY_META_SESSION.equals(keys[i])
@@ -99,10 +101,6 @@ public final class StatusProvider extends ContentProvider {
         }
         String storedSession = sp.getString(
                 VALUE_PREFIX + ReportProtocol.KEY_META_SESSION, null);
-        if (ReportProtocol.isStaleSession(storedSession, incomingSession)) {
-            // 返回非 null（ok）让发送方停止重试这一批；旧数据不能被覆盖。
-            return new Bundle();
-        }
         SharedPreferences.Editor editor = sp.edit();
         boolean newSession = ReportProtocol.isNewSession(storedSession, incomingSession);
         if (newSession) {
@@ -212,6 +210,21 @@ public final class StatusProvider extends ContentProvider {
             return sp.getLong(VALUE_PREFIX + PREFIX_HIT + key, 0L);
         } catch (Throwable t) {
             return 0L;
+        }
+    }
+
+    /** 读取第 index 条最近崩溃（0 最新）；没有数据或读取失败返回 null。 */
+    public static String reportCrash(Context context, int index) {
+        if (context == null || index < 0 || index > 2) {
+            return null;
+        }
+        String key = index == 0 ? ReportProtocol.KEY_CRASH_0
+                : index == 1 ? ReportProtocol.KEY_CRASH_1 : ReportProtocol.KEY_CRASH_2;
+        try {
+            SharedPreferences sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            return sp.getString(VALUE_PREFIX + key, null);
+        } catch (Throwable t) {
+            return null;
         }
     }
 

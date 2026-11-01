@@ -33,9 +33,13 @@ import io.github.yigenhuobah.tiebaquiet.StatusProvider;
  * 不刷日志。只在主进程启动（由入口类保证）。
  *
  * <p>每次回传都带 {@code meta.session} 与 {@code meta.updated_at}：前者用于会话
- * 身份比较（不同即新会话；无会话标识的旧版回传被接收端整批丢弃），后者用于
- * 10 分钟 TTL 判定。内容去重时必须剔除 meta 键，
+ * 身份比较（不同即新会话；无会话标识的旧版回传被接收端按同会话兼容合并进当前
+ * 数据），后者用于 10 分钟 TTL 判定。内容去重时必须剔除 meta 键，
  * 否则每轮时间戳变化都会让快照“看起来变了”。
+ *
+ * <p>内置诊断：主进程启动时幂等包装默认 UEH（{@link #installCrashHandler}），
+ * 记录目标进程最近崩溃（进程内环形缓冲，snapshot 打平为 crash0/crash1/crash2）；
+ * 先写崩溃再透传 previous，绝不改变目标 App 原有的异常处理行为。
  */
 public final class Report {
 
@@ -44,6 +48,18 @@ public final class Report {
     private static final long INITIAL_DELAY_SECONDS = 2L;
     private static final long PERIOD_SECONDS = 3L;
     private static final long BACKOFF_MS = 60_000L;
+
+    /** 单条崩溃文本上限：在 MAX_VALUE=256 之内留键名与通道开销余量。 */
+    private static final int MAX_CRASH_CHARS = 240;
+
+    /**
+     * 最近崩溃环（最新在前，最多 3 条）：UEH 在崩溃线程写入，{@link #snapshot}
+     * 打平为 crash0/crash1/crash2 键。只存进程内静态数据，目标进程重启后自然清零。
+     */
+    private static final List<String> CRASHES = new ArrayList<>(3);
+    private static final Object CRASH_LOCK = new Object();
+    /** UEH 只包一次：保证幂等，重复调用不得重复包装调用链。 */
+    private static volatile boolean sCrashHandlerInstalled;
 
     /**
      * 本次目标进程会话标识："s<millis>-<8位hex>"。毫秒只作参考，唯一性由进程随机
@@ -93,6 +109,75 @@ public final class Report {
                 }
             }
         }, INITIAL_DELAY_SECONDS, PERIOD_SECONDS, TimeUnit.SECONDS);
+    }
+
+    /**
+     * 幂等包装默认 UEH：previous 先保存，自定义 handler 内先记录崩溃（见
+     * {@link #recordCrash}）再透传 previous（非空时），全程 try/catch——绝不因
+     * 我们抛异常、绝不改变目标 App 原有的异常处理行为。{@link #sCrashHandlerInstalled}
+     * 保证只包一次。public static：由 TiebaQuietModule 在主进程 Report.start() 的
+     * 调用点一并接入；JVM 单测直接验证幂等与记录语义（见 ReportTest）。
+     */
+    public static synchronized void installCrashHandler() {
+        if (sCrashHandlerInstalled) {
+            return;
+        }
+        sCrashHandlerInstalled = true;
+        final Thread.UncaughtExceptionHandler previous =
+                Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            @Override
+            public void uncaughtException(Thread thread, Throwable throwable) {
+                try {
+                    recordCrash(thread, throwable);
+                } catch (Throwable ignored) {
+                }
+                if (previous != null) {
+                    previous.uncaughtException(thread, throwable);
+                }
+            }
+        });
+    }
+
+    /**
+     * 记录一条崩溃：时间（epoch 毫秒）|线程名|异常类名|栈前 2 帧，单条截断
+     * ≤ {@link #MAX_CRASH_CHARS}。新的顶掉最旧的；记录本身抛出的任何异常都
+     * 不得上抛（由调用方 UEH 的 try/catch 兜底），避免干扰原有处理链。
+     */
+    static void recordCrash(Thread thread, Throwable throwable) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(System.currentTimeMillis()).append('|');
+        sb.append(thread != null ? thread.getName() : "?").append('|');
+        if (throwable == null) {
+            sb.append('?');
+        } else {
+            sb.append(throwable.getClass().getName());
+            StackTraceElement[] frames = throwable.getStackTrace();
+            for (int i = 0; i < 2 && i < frames.length; i++) {
+                sb.append('|').append(frames[i]);
+            }
+        }
+        String entry = truncateCrash(sb.toString());
+        synchronized (CRASH_LOCK) {
+            CRASHES.add(0, entry);
+            while (CRASHES.size() > 3) {
+                CRASHES.remove(CRASHES.size() - 1);
+            }
+        }
+    }
+
+    /** 第 i 新的崩溃文本（0=最新）；不足返回空串（空串覆盖清掉旧会话残留）。 */
+    private static String crashAt(int index) {
+        synchronized (CRASH_LOCK) {
+            return index >= 0 && index < CRASHES.size() ? CRASHES.get(index) : "";
+        }
+    }
+
+    private static String truncateCrash(String s) {
+        if (s == null) {
+            return "";
+        }
+        return s.length() <= MAX_CRASH_CHARS ? s : s.substring(0, MAX_CRASH_CHARS);
     }
 
     /**
@@ -168,11 +253,13 @@ public final class Report {
 
     /**
      * HookState 快照 → 平铺的 key/value（key 用 reg./hit./skip./crit. 前缀，
-     * value 截断到 256），并附带 meta.session / meta.updated_at。
+     * value 截断到 256），并附带 meta.session / meta.updated_at 与 crash0/1/2。
      *
      * <p>reg / skip / crit 对每个 touched Feature 都必须发送，缺失时发空串：
      * StatusProvider 用最新值覆盖旧值，只有空串才能清掉上一次目标进程会话遗留的
      * skip/crit。hit 仍只在 &gt; 0 时发送，由 provider 取会话内最大值。
+     * crash0/1/2（0 最新，来自进程内崩溃环）始终发送、无崩溃发空串：与 reg/skip
+     * 同一清残留机制，单条已在记录时截断到 240（≤ MAX_VALUE）。
      */
     static Map<String, String> snapshot() {
         Map<String, String> out = new TreeMap<>();
@@ -188,6 +275,9 @@ public final class Report {
             out.put(ReportProtocol.PREFIX_CRIT + feature.key,
                     HookState.hasCriticalSkip(feature) ? "1" : "");
         }
+        out.put(ReportProtocol.KEY_CRASH_0, truncate(crashAt(0)));
+        out.put(ReportProtocol.KEY_CRASH_1, truncate(crashAt(1)));
+        out.put(ReportProtocol.KEY_CRASH_2, truncate(crashAt(2)));
         out.put(ReportProtocol.KEY_META_SESSION, SESSION);
         // 每次发送都刷新，心跳才能把 TTL 续上。
         out.put(ReportProtocol.KEY_META_UPDATED_AT, String.valueOf(System.currentTimeMillis()));

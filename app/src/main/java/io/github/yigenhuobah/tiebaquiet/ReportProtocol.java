@@ -23,16 +23,21 @@ public final class ReportProtocol {
     public static final String KEY_META_SESSION = "meta.session";
     public static final String KEY_META_UPDATED_AT = "meta.updated_at";
 
+    /** 最近崩溃回传键（crash0 最新，crash2 最旧）：键值通道的固定键名。 */
+    public static final String KEY_CRASH_0 = "crash0";
+    public static final String KEY_CRASH_1 = "crash1";
+    public static final String KEY_CRASH_2 = "crash2";
+
     public static final int MAX_KEY = 128;
     public static final int MAX_VALUE = 256;
 
     /** 超过 10 分钟没有新回传就视为过期，失败计数按“未知”处理（0）。 */
     public static final long DEFAULT_TTL_MS = 10 * 60 * 1000L;
 
-    /** updatedAt 领先 now 超过该值（时钟回拨/未来时间戳）视为过期，不再当新鲜。 */
-    public static final long FUTURE_GRACE_MS = 5 * 60 * 1000L;
+    /** 未来时间戳容忍上限：updatedAt 领先 now 超过该值视为时钟回拨/异常，直接判过期。 */
+    public static final long MAX_FUTURE_SKEW_MS = 5 * 60 * 1000L;
 
-    /** 25 个 Feature × 4 个前缀 = 100 个功能键，加 2 个 meta 键共 102 个，构建后不可变。 */
+    /** 25 个 Feature × 4 个前缀 + 2 个 meta 键 + 3 个 crash 键，构建后不可变。 */
     private static final Set<String> ALLOWED_KEYS = buildAllowedKeys();
 
     private ReportProtocol() {
@@ -48,6 +53,9 @@ public final class ReportProtocol {
         }
         keys.add(KEY_META_SESSION);
         keys.add(KEY_META_UPDATED_AT);
+        keys.add(KEY_CRASH_0);
+        keys.add(KEY_CRASH_1);
+        keys.add(KEY_CRASH_2);
         return Collections.unmodifiableSet(keys);
     }
 
@@ -107,39 +115,28 @@ public final class ReportProtocol {
 
     /**
      * 回传数据是否仍新鲜。updatedAt &lt;= 0 表示从未回传或旧版本没有时间戳；
-     * updatedAt 领先 now 超过 {@link #FUTURE_GRACE_MS}（时钟回拨/未来时间戳）
-     * 视为过期，不再当新鲜；小幅偏差仍按新鲜处理，正常 TTL 逻辑保留。
+     * updatedAt 领先本机时间超过 {@link #MAX_FUTURE_SKEW_MS}（设备时钟回拨/
+     * 未来时间戳）同样视为过期——否则回拨后旧快照会因 updatedAt 落在“未来”
+     * 而被长期当作新鲜数据；小幅偏差仍按新鲜处理，正常 TTL 逻辑保留。
      */
     public static boolean isFresh(long updatedAt, long now, long ttlMs) {
         if (updatedAt <= 0L || ttlMs <= 0L) {
             return false;
         }
-        if (now - updatedAt < -FUTURE_GRACE_MS) {
+        if (now - updatedAt < -MAX_FUTURE_SKEW_MS) {
             return false;
         }
         return now - updatedAt <= ttlMs;
     }
 
     /**
-     * 缺失会话标识的回传（旧版目标进程不带 meta.session）：已存会话存在时整批
-     * 丢弃，不能让无身份的回传覆盖新会话的 reg/skip。
+     * 会话身份比较：session 字符串不同即新会话（上一会话数据必须重置），
+     * 相同即同进程。旧格式（纯数字毫秒）同样按字符串比较，不做大小比较——
+     * 设备时钟回拨会让新进程的毫秒值更小，按大小比较会把整批回写误判为旧会话丢弃。
      *
-     * <p>会话之间不再按毫秒比大小：两个都带 session 的批次只有“相同/不同”两种
-     * 关系，不同交给 {@link #isNewSession} 清库后接受——设备时钟回拨后新会话的
-     * 毫秒值会小于已存值，按数值比较整批丢弃会让诊断数据在本会话内静默失效。
-     */
-    public static boolean isStaleSession(String storedSession, String incomingSession) {
-        if (incomingSession == null || incomingSession.isEmpty()) {
-            return storedSession != null && !storedSession.isEmpty();
-        }
-        return false;
-    }
-
-    /**
-     * 新会话（身份比较）：本次携带会话标识且与已存值不同，需要先清掉旧会话数据。
-     * 生成端形如 "s&lt;millis&gt;-&lt;8位hex&gt;"（进程随机后缀保证唯一，时钟回拨不影响
-     * 身份）；旧格式（纯数字毫秒）同样按“不同即新会话”处理，模块 App 与目标进程
-     * 可各自升级。
+     * <p>旧版目标进程没有 session 字段（incoming 为空）：无从比较，按同会话兼容
+     * 合并进当前数据，保证模块 App 与目标进程可各自升级；首个带 session 的
+     * 回传仍会重置旧数据。
      */
     public static boolean isNewSession(String storedSession, String incomingSession) {
         if (incomingSession == null || incomingSession.isEmpty()) {
