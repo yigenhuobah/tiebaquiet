@@ -8,6 +8,8 @@
 - 运行环境：LSPosed 2.1+ / Vector 2.2+（Zygisk），API 102
 - 仓库：<https://github.com/yigenhuobah/tiebaquiet> ｜ 反馈：[Issues](https://github.com/yigenhuobah/tiebaquiet/issues/new/choose)
 
+更新日志见 [CHANGELOG.md](CHANGELOG.md)。
+
 ## 功能
 
 设置页按用途分组，顺序固定 **AD 广告净化 → UI 界面精简 → PV 隐私保护 → EN 功能增强**。编号用于文档、日志与诊断页；remote prefs 键保持不变。
@@ -85,7 +87,7 @@
 
 ## 构建
 
-要求：JDK 17 及以上（CI 使用 21）、Android SDK Platform 37（libxposed 102 的 aar 要求 `compileSdk 37`）。
+要求：JDK 21、Android SDK Platform 37（libxposed 102 的 aar 要求 `compileSdk 37`）。
 
 ```bash
 ./gradlew :app:assembleDebug
@@ -99,7 +101,9 @@
 ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleRelease --no-daemon
 ```
 
-当前共 **107 个 JVM 单测**（`app/src/test`），CI 在 push 到 main 和 PR 时运行单测与 lint。
+当前共 **153 个 JVM 单测**（`app/src/test`），CI 在 push 到 main 和 PR 时运行单测与 lint。
+
+本地预检：`bash tools/preflight.sh`；锚点体检：`bash tools/check-mounts.sh --apk <贴吧apk>`（缺省自动探测；无 DexSQL 时进入降级模式，只校验锚点表完整性）。
 
 ## 架构
 
@@ -124,13 +128,18 @@ python tools/gen_anchors.py --apk <新版本apk> --out app/src/main/resources/an
 
 ## 兼容性与风险
 
-- 仅声明支持 22.13.1.1；混淆类（`fz8` 等）通过字符串锚点在 `gen_anchors.py` 中定位，跨版本需重新生成。
+| 宿主版本 | 状态 | 说明 |
+|---|---|---|
+| 22.13.1.1（369950981） | 已适配 | 当前声明版本；锚点表 57 个方法 + 7 个类 |
+| 22.12.1.0（369885440） | 历史适配，不再保证 | 0.3.0 及以前使用；22.13.1.1 混淆名大洗牌后需重新生成锚点 |
+
+- 仅声明支持表中「已适配」版本；混淆类（`fz8` 等）通过字符串锚点在 `gen_anchors.py` 中定位，跨版本需重新生成。
 - 贴吧业务方法普遍带 Titan 热修桩（`$ic`）。模块遵循：优先 replace/after，before 不 return，不 hook clinit/构造器。
 - 已知暴露面：贴吧内置 sofire/weapon 等检测会随请求上报 Xposed 环境特征；本模块不做任何检测绕过，只减少主动触碰（不 hook 框架方法、不碰签名/发送层、不做设备号伪造）。
 - “启动任务精简”曾 hook `LaunchTask.run()`，但它是所有启动任务的模板方法，跳过会导致 Fresco 图片管线未初始化、贴吧启动即闪退，已移除。
 - 修改开关后需要强制停止并重新打开贴吧生效（RemotePreferences 在进程启动时读取）。
 
-### 已知限制（0.3.1）
+### 已知限制（0.3.3）
 
 - **22.13.1.1 锚点已重生成，未逐项真机复验**：2026-10-31 基于 22.13.1.1（versionCode 369950981）APK 重新定位 14 处混淆锚点并重生成 anchors.json（55 方法 + 7 类全命中，0 MISSING）；功能行为未逐项真机回归。2026-11-01 追加：UI-03 注入链 `k()`/`getInnerWebView` 收编为锚点 `person_tab_web_k`/`tbwebview_inner`（57 方法 + 7 类），两个描述符已对 22.13.1.1 dex 逐一核实；`gen_anchors.py` 尚未携带 APK 重新全量校验，下次重生成时以 0 MISSING 为准。
 

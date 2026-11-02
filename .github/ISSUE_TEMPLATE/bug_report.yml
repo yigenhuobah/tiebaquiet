@@ -10,7 +10,7 @@ body:
 
         1. 模块已在 LSPosed / Vector 里启用，作用域勾选了百度贴吧；
         2. 改过开关后**已重启百度贴吧**（多数功能重启生效）；
-        3. 已对照 README 的「兼容性与风险」确认贴吧版本在适配范围内（当前为 22.12.1.0）。
+        3. 已对照 README 的「兼容性与风险」确认贴吧版本在适配范围内（当前为 22.13.1.1）。
 
         没有版本信息的 issue 无法定位，下面的字段请尽量填全。
   - type: input
@@ -18,7 +18,7 @@ body:
     attributes:
       label: 模块版本
       description: 模块设置页「关于」可见版本名与 versionCode
-      placeholder: "0.2.1 (3)"
+      placeholder: "0.3.3 (7)"
     validations:
       required: true
   - type: input
@@ -26,7 +26,7 @@ body:
     attributes:
       label: 百度贴吧版本
       description: 系统设置 → 应用信息 → 版本号（写数字 versionCode 更好）
-      placeholder: "22.12.1.0 (369885440)"
+      placeholder: "22.13.1.1 (369950981)"
     validations:
       required: true
   - type: input

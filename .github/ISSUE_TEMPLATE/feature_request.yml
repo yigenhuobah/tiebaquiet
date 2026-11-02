@@ -29,14 +29,14 @@ body:
     id: target-version
     attributes:
       label: 百度贴吧版本（可选）
-      placeholder: "22.12.1.0 (369885440)"
+      placeholder: "22.13.1.1 (369950981)"
     validations:
       required: false
   - type: input
     id: module-version
     attributes:
       label: 模块版本（可选）
-      placeholder: "0.2.1 (3)"
+      placeholder: "0.3.3 (7)"
     validations:
       required: false
   - type: textarea
