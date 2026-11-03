@@ -143,18 +143,62 @@ public final class Feature {
     /** 调用原方法后变换结果；变换异常时回退原结果，proceed 只发生一次。 */
     public boolean after(HookEnv env, Method method, String label,
                          final Transformer transform) {
-        return hook(env, method, label, new XposedInterface.Hooker() {
+        return hook(env, method, label, afterHooker(this, env, label, transform));
+    }
+
+    /**
+     * after 钩子的实际实现，抽成包内静态方法便于 JVM 单测。
+     * {@code chain.proceed()} 的宿主异常用 {@link HostException} 标记，
+     * 由 wrapHit 原样抛出且不计入 hook 错误。
+     */
+    static XposedInterface.Hooker afterHooker(final Feature feature, final HookEnv env,
+                                              final String label,
+                                              final Transformer transform) {
+        return new XposedInterface.Hooker() {
             @Override
             public Object intercept(XposedInterface.Chain chain) throws Throwable {
-                Object result = chain.proceed();
+                // 宿主方法自身抛异常不是 hook 体错误：proceed 标记后由 wrapHit 原样抛出。
+                Object result = proceed(chain);
                 try {
                     return transform.apply(result);
                 } catch (Throwable t) {
-                    env.module.log(Log.WARN, TAG, code + " transform failed " + label, t);
+                    // 变换失败仍回退原结果（fail-open）。瞬时 transform 异常不能计入
+                    // err：err>0 会让 featureFailed 把已安装且宿主调用成功的功能永久
+                    // 判失败并弹横幅；这里只保留 WARN 供诊断。
+                    env.module.log(Log.WARN, TAG, feature.code + " transform failed " + label, t);
                     return result;
                 }
             }
-        });
+        };
+    }
+
+    /**
+     * 调用宿主方法：宿主异常用 {@link HostException} 标记，由 wrapHit 原样抛出且
+     * 不计 hook 错误。所有 hook 的 chain.proceed 都应走这里，避免宿主自身异常
+     * 被误报成功能失败；只能在 {@link #hook} 安装的 hook 体内调用。
+     */
+    public static Object proceed(XposedInterface.Chain chain) throws Throwable {
+        try {
+            return chain.proceed();
+        } catch (Throwable t) {
+            throw new HostException(t);
+        }
+    }
+
+    /** 带替换参数调用宿主方法，语义同 {@link #proceed(XposedInterface.Chain)}。 */
+    public static Object proceed(XposedInterface.Chain chain, Object[] args) throws Throwable {
+        try {
+            return chain.proceed(args);
+        } catch (Throwable t) {
+            throw new HostException(t);
+        }
+    }
+
+    /** chain.proceed 抛出的宿主异常标记：wrapHit 不把它计入 hook 错误。 */
+    private static final class HostException extends RuntimeException {
+        HostException(Throwable cause) {
+            super(cause);
+        }
     }
 
     /** 供没有 hook 可装的安装器（例如签到命令通道）记录锚点缺失。 */
@@ -167,12 +211,29 @@ public final class Feature {
         return new XposedInterface.Hooker() {
             @Override
             public Object intercept(XposedInterface.Chain chain) throws Throwable {
+                Object result;
+                try {
+                    result = delegate.intercept(chain);
+                } catch (HostException host) {
+                    // 宿主方法自身抛出的异常：不是 hook 体错误，原样抛出且不计数。
+                    throw host.getCause();
+                } catch (Throwable t) {
+                    // 异常仍原样抛出，由 PROTECTIVE 模式兜底（fail-open 不变）；
+                    // 但必须先记 error，避免“每次必抛”仍只表现为健康 hit。
+                    long errors = HookState.error(Feature.this);
+                    // 前 5 次与每第 100 次写日志，避免高频 hook 刷爆 logcat。
+                    if (errors <= 5 || errors % 100 == 0) {
+                        env.module.log(Log.WARN, TAG, code + " hook body error " + label
+                                + " #" + errors + " " + t.getClass().getName(), t);
+                    }
+                    throw t;
+                }
+                // 只有 hook 体成功返回才算命中：抛异常不计 hit，避免健康假象。
                 long count = HookState.hit(Feature.this);
-                // 前 5 次与每第 100 次写日志，避免高频 hook 刷爆 logcat。
                 if (count <= 5 || count % 100 == 0) {
                     env.module.log(Log.INFO, TAG, code + " hit " + label + " #" + count);
                 }
-                return delegate.intercept(chain);
+                return result;
             }
         };
     }

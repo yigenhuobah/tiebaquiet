@@ -47,9 +47,19 @@
 
 ## 适配新版本
 
-1. 用新版本 APK 跑 `tools/gen_anchors.py` 重新生成 `anchors.json`，确认 0 MISSING
-2. 真机验证核心功能，附诊断页导出
-3. 更新 README 兼容性表与 CHANGELOG
+1. 用新版本 APK 重新生成锚点表：
+   ```bash
+   python tools/gen_anchors.py --apk /path/to/base.apk \
+       --out app/src/main/resources/anchors.json --dexsql /path/to/dexsql
+   ```
+2. 跑 `tools/check-mounts.sh` 全量校验（57 方法 + 7 类），退出码必须为 0：
+   ```bash
+   bash tools/check-mounts.sh --apk /path/to/base.apk --dexsql /path/to/dexsql
+   ```
+3. 真机验证核心功能，附诊断页导出
+4. 更新 README 兼容性表与 CHANGELOG
+
+发布前 `tools/release.sh` 默认要求 `--host-apk` + `--dexsql`（或 `DEXSQL`）；`verify-apk.sh` 还会校验 APK 内 `anchors.json` 的 `appVersion` 与 `ConfigStore.TARGET_VERSION` 一致。
 
 ## 不接受
 

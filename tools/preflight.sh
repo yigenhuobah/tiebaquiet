@@ -92,6 +92,17 @@ printf '%s\n' "$README_HEAD" | grep -qF "versionCode $VERSION_CODE" \
     || fail "README.md 首屏未包含当前 versionCode ($VERSION_CODE)：请同步「模块版本」"
 info "readme version: $VERSION_NAME (versionCode $VERSION_CODE)"
 
+# CHANGELOG 必须有当前版本的非空小节，防止无条目或「修复若干」发布。
+if ! awk -v v="$VERSION_NAME" '
+    $0 ~ "^## " v "([[:space:]]|$)" { in_section = 1; next }
+    in_section && /^## / { exit }
+    in_section && NF { found = 1 }
+    END { exit found ? 0 : 1 }
+' CHANGELOG.md; then
+    fail "CHANGELOG.md 缺少 $VERSION_NAME 的非空小节"
+fi
+info "changelog section: $VERSION_NAME"
+
 # ---------------------------------------------------------------- tests + lint
 info "running ./gradlew :app:testDebugUnitTest lintDebug"
 ./gradlew :app:testDebugUnitTest lintDebug

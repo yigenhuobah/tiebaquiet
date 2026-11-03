@@ -2,7 +2,7 @@
 
 基于 [libxposed API 102](https://repo.maven.apache.org/maven2/io/github/libxposed/) 的 LSPosed 模块，为百度贴吧（`com.baidu.tieba`）提供去广告、界面精简、功能增强与隐私保护。
 
-- 模块版本：**0.3.3**（versionCode 7）
+- 模块版本：**0.3.4**（versionCode 8）
 - 目标版本：百度贴吧 **22.13.1.1**（versionCode 369950981）
 - 包名：`io.github.yigenhuobah.tiebaquiet`
 - 运行环境：LSPosed 2.1+ / Vector 2.2+（Zygisk），API 102

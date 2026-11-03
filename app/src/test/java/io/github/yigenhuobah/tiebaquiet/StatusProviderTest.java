@@ -13,8 +13,8 @@ import java.util.Set;
  * StatusProvider 失败统计的纯逻辑：TTL、启用状态与 failure 语义。
  *
  * <p>不构造 ContentProvider / SharedPreferences，只用 key → value 的 Map 重放
- * provider 的判定路径：过期 / 未回传 / 未启用都不计失败；reg 为空或 crit=1 才算失败，
- * 普通 skip 只作诊断。
+ * provider 的判定路径：过期 / 未回传 / 未启用都不计失败；reg 为空、crit=1 或 err&gt;0
+ * 才算失败，普通 skip 只作诊断。
  */
 public class StatusProviderTest {
 
@@ -65,6 +65,25 @@ public class StatusProviderTest {
         report.put(StatusProvider.PREFIX_REG + "hot_card_filter", "template_set_list");
         report.put(StatusProvider.PREFIX_CRIT + "hot_card_filter", "1");
         assertEquals(1, StatusProvider.countFailed(enabled("hot_card_filter"), report, NOW - 1L, NOW));
+    }
+
+    /** hook 体异常：有注册标签也要计入失败横幅，否则“每次必抛”仍显示健康。 */
+    @Test
+    public void hookBodyErrorsFailEvenWithRegistration() {
+        Map<String, String> report = new HashMap<>();
+        report.put(StatusProvider.PREFIX_REG + "clipboard_guard", "clipboard_guard_hook");
+        report.put(StatusProvider.PREFIX_ERR + "clipboard_guard", "3");
+        assertEquals(1, StatusProvider.countFailed(
+                enabled("clipboard_guard"), report, NOW - 1L, NOW));
+    }
+
+    @Test
+    public void zeroErrorCountDoesNotFail() {
+        Map<String, String> report = new HashMap<>();
+        report.put(StatusProvider.PREFIX_REG + "clipboard_guard", "clipboard_guard_hook");
+        report.put(StatusProvider.PREFIX_ERR + "clipboard_guard", "0");
+        assertEquals(0, StatusProvider.countFailed(
+                enabled("clipboard_guard"), report, NOW - 1L, NOW));
     }
 
     @Test

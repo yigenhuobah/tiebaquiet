@@ -112,6 +112,28 @@ public class HookStateTest {
     }
 
     @Test
+    public void errorIncrementsCountIndependentlyOfHit() {
+        Feature f = FeatureRegistry.byKey("clipboard_guard");
+        // HookState 是进程级静态状态：按基线增量断言，避免与其它用例互相污染。
+        long baseErrors = HookState.errorCount(f);
+        long baseHits = HookState.hitCount(f);
+        assertEquals("每次 error 恰好 +1", baseErrors + 1L, HookState.error(f));
+        assertEquals(baseErrors + 2L, HookState.error(f));
+        assertEquals("errorCount 与累加结果一致", baseErrors + 2L, HookState.errorCount(f));
+        assertEquals("hook 体异常不能算作命中", baseHits, HookState.hitCount(f));
+    }
+
+    @Test
+    public void snapshotIncludesErrorCount() {
+        Feature f = FeatureRegistry.byKey("clipboard_guard");
+        HookState.error(f);
+        Map<String, String> snapshot = HookState.snapshot();
+        assertEquals("错误计数必须以 err.<key> 进入快照",
+                String.valueOf(HookState.errorCount(f)),
+                snapshot.get(ReportProtocol.PREFIX_ERR + f.key));
+    }
+
+    @Test
     public void snapshotTruncatesSkipReason() {
         Feature f = FeatureRegistry.byKey("profile_cleanup");
         String reason = "x".repeat(300);

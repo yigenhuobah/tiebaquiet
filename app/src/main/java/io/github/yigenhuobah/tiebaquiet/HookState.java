@@ -12,11 +12,11 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 目标进程内的诊断状态：每个功能的注册标签、命中次数、跳过原因与主锚点缺失标记。
+ * 目标进程内的诊断状态：每个功能的注册标签、命中次数、错误次数、跳过原因与主锚点缺失标记。
  *
  * <p>命中可能来自任意线程（含 binder 线程），全部使用并发容器。
  * 快照由 {@link io.github.yigenhuobah.tiebaquiet.hooks.Report} 定期回传，
- * 键使用 {@code reg./hit./skip./crit.} 前缀，值截断到 256 字符。
+ * 键使用 {@code reg./hit./err./skip./crit.} 前缀，值截断到 256 字符。
  */
 public final class HookState {
 
@@ -31,6 +31,7 @@ public final class HookState {
         final Set<String> labels = ConcurrentHashMap.newKeySet();
         final Set<String> criticalSkips = ConcurrentHashMap.newKeySet();
         final AtomicLong hits = new AtomicLong();
+        final AtomicLong errors = new AtomicLong();
         volatile String skip;
 
         void markSkip(String reason) {
@@ -98,6 +99,14 @@ public final class HookState {
         return state(feature).hits.incrementAndGet();
     }
 
+    /**
+     * hook 体异常计数 +1，返回累加后的次数（供日志采样）。
+     * 与 hit 分开统计：抛异常的调用不算命中，但仍要让诊断页/横幅看到失败。
+     */
+    public static long error(Feature feature) {
+        return state(feature).errors.incrementAndGet();
+    }
+
     /** 快照只包含被触碰过的功能，按功能编号排序，便于测试与日志比对。 */
     public static List<Feature> touched() {
         List<Feature> out = new ArrayList<>(STATES.keySet());
@@ -125,14 +134,19 @@ public final class HookState {
         return s == null ? 0L : s.hits.get();
     }
 
+    public static long errorCount(Feature feature) {
+        State s = STATES.get(feature);
+        return s == null ? 0L : s.errors.get();
+    }
+
     public static String skipReason(Feature feature) {
         State s = STATES.get(feature);
         return s == null ? null : s.skip;
     }
 
     /**
-     * 打平为 {@code reg.<key> / hit.<key> / skip.<key>} 的 Map。
-     * 没有注册标签、没有命中、没有 skip 的功能不会出现在快照里。
+     * 打平为 {@code reg.<key> / hit.<key> / err.<key> / skip.<key>} 的 Map。
+     * 没有注册标签、没有命中、没有错误、没有 skip 的功能不会出现在快照里。
      *
      * <p><b>仅供单测使用</b>（HookStateTest），禁止接入上报路径：生产上报必须走
      * {@code hooks.Report#snapshot()}，后者对每个 touched 功能无条件发送
@@ -151,6 +165,10 @@ public final class HookState {
             long hits = hitCount(feature);
             if (hits > 0) {
                 out.put(ReportProtocol.PREFIX_HIT + feature.key, String.valueOf(hits));
+            }
+            long errors = errorCount(feature);
+            if (errors > 0) {
+                out.put(ReportProtocol.PREFIX_ERR + feature.key, String.valueOf(errors));
             }
             String skip = skipReason(feature);
             if (skip != null) {

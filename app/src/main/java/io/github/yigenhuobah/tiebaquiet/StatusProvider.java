@@ -42,6 +42,7 @@ public final class StatusProvider extends ContentProvider {
 
     public static final String PREFIX_REG = ReportProtocol.PREFIX_REG;
     public static final String PREFIX_HIT = ReportProtocol.PREFIX_HIT;
+    public static final String PREFIX_ERR = ReportProtocol.PREFIX_ERR;
     public static final String PREFIX_SKIP = ReportProtocol.PREFIX_SKIP;
     public static final String PREFIX_CRIT = ReportProtocol.PREFIX_CRIT;
 
@@ -153,9 +154,9 @@ public final class StatusProvider extends ContentProvider {
                     continue;
                 }
                 editor.putLong(VALUE_PREFIX + key, updatedAt);
-            } else if (key.startsWith(PREFIX_HIT)) {
-                // 多进程各自回传，取历史最大值，避免重复累加或被低计数覆盖；
-                // 新会话从 0 重新开始，旧会话的 hit 已被清掉。
+            } else if (key.startsWith(PREFIX_HIT) || key.startsWith(PREFIX_ERR)) {
+                // hit/err 都是单调递增计数：多进程各自回传，取历史最大值，
+                // 避免重复累加或被低计数覆盖；新会话从 0 重新开始。
                 long previous = newSession ? 0L : sp.getLong(VALUE_PREFIX + key, 0L);
                 long next;
                 try {
@@ -183,6 +184,7 @@ public final class StatusProvider extends ContentProvider {
         for (String key : sp.getAll().keySet()) {
             if (key.startsWith(VALUE_PREFIX + PREFIX_REG)
                     || key.startsWith(VALUE_PREFIX + PREFIX_HIT)
+                    || key.startsWith(VALUE_PREFIX + PREFIX_ERR)
                     || key.startsWith(VALUE_PREFIX + PREFIX_SKIP)
                     || key.startsWith(VALUE_PREFIX + PREFIX_CRIT)) {
                 editor.remove(key);
@@ -208,6 +210,16 @@ public final class StatusProvider extends ContentProvider {
         try {
             SharedPreferences sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
             return sp.getLong(VALUE_PREFIX + PREFIX_HIT + key, 0L);
+        } catch (Throwable t) {
+            return 0L;
+        }
+    }
+
+    /** 读取 hook 体错误计数；没有数据或读取失败返回 0。 */
+    public static long reportError(Context context, String key) {
+        try {
+            SharedPreferences sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            return sp.getLong(VALUE_PREFIX + PREFIX_ERR + key, 0L);
         } catch (Throwable t) {
             return 0L;
         }
@@ -250,8 +262,9 @@ public final class StatusProvider extends ContentProvider {
     /**
      * 统计“已启用且明确失败”的功能数，供异常横幅使用。
      *
-     * <p>失败判定同时满足：用户配置为开启；目标进程有回传；reg 为空或 crit=1。
-     * 普通 skip 只用于诊断展示，不计入失败。没有回传的功能不计入，避免刚装上或
+     * <p>失败判定同时满足：用户配置为开启；目标进程有回传；reg 为空、crit=1
+     * 或 err&gt;0（hook 体抛过异常，不含宿主 proceed）。普通 skip 只用于诊断展示，不计入失败。
+     * 没有回传的功能不计入，避免刚装上或
      * 目标应用未启动时误报。只在主进程回传，子进程未装 hook 的 skip 不会被误算。
      * 数据超过 TTL 视为未知，直接返回 0，避免旧会话长期误报横幅。
      */
@@ -303,6 +316,8 @@ public final class StatusProvider extends ContentProvider {
                     reportString(context, PREFIX_CRIT, feature.key));
             report.put(PREFIX_HIT + feature.key,
                     String.valueOf(reportHit(context, feature.key)));
+            report.put(PREFIX_ERR + feature.key,
+                    String.valueOf(reportError(context, feature.key)));
         }
         return countFailed(enabledKeys, report, updatedAt, now);
     }
@@ -311,7 +326,8 @@ public final class StatusProvider extends ContentProvider {
      * 纯逻辑失败统计：可脱离 Android 在 JVM 单测中验证阈值与判定（见 StatusProviderTest）。
      *
      * @param enabledKeys 用户配置为开启的功能 key
-     * @param report      key → value，key 形如 {@code reg./skip./crit./hit.<featureKey>}
+     * @param report      key → value，key 形如
+     *                    {@code reg./skip./crit./hit./err.<featureKey>}
      * @param updatedAt   最近一次回传落盘时间
      * @param now         当前时间
      */
@@ -332,7 +348,9 @@ public final class StatusProvider extends ContentProvider {
             String skip = report.get(PREFIX_SKIP + feature.key);
             String crit = report.get(PREFIX_CRIT + feature.key);
             long hit = parseHit(report.get(PREFIX_HIT + feature.key));
-            if (ReportProtocol.featureFailed(reg, skip, ReportProtocol.isCritical(crit), hit)) {
+            long errors = parseHit(report.get(PREFIX_ERR + feature.key));
+            if (ReportProtocol.featureFailed(reg, skip, ReportProtocol.isCritical(crit),
+                    hit, errors)) {
                 failed++;
             }
         }

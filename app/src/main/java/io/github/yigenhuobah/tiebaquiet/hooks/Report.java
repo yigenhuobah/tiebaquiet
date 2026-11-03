@@ -21,7 +21,7 @@ import io.github.yigenhuobah.tiebaquiet.ReportProtocol;
 import io.github.yigenhuobah.tiebaquiet.StatusProvider;
 
 /**
- * 目标进程 → 模块 App 的诊断回传（registered / hit / skip / critical）。
+ * 目标进程 → 模块 App 的诊断回传（registered / hit / error / skip / critical）。
  *
  * <p>hook 侧只能主动 call 进模块的 ContentProvider（remote prefs 在目标进程只读）。
  * Context 用 ActivityThread 反射拿；onPackageReady 之后 Application 很快可用，
@@ -252,12 +252,13 @@ public final class Report {
     }
 
     /**
-     * HookState 快照 → 平铺的 key/value（key 用 reg./hit./skip./crit. 前缀，
+     * HookState 快照 → 平铺的 key/value（key 用 reg./hit./err./skip./crit. 前缀，
      * value 截断到 256），并附带 meta.session / meta.updated_at 与 crash0/1/2。
      *
      * <p>reg / skip / crit 对每个 touched Feature 都必须发送，缺失时发空串：
      * StatusProvider 用最新值覆盖旧值，只有空串才能清掉上一次目标进程会话遗留的
-     * skip/crit。hit 仍只在 &gt; 0 时发送，由 provider 取会话内最大值。
+     * skip/crit。hit/err 只在 &gt; 0 时发送，由 provider 取会话内最大值；
+     * 新会话清库已能清掉旧值，且两者都只增不减。
      * crash0/1/2（0 最新，来自进程内崩溃环）始终发送、无崩溃发空串：与 reg/skip
      * 同一清残留机制，单条已在记录时截断到 240（≤ MAX_VALUE）。
      */
@@ -269,6 +270,10 @@ public final class Report {
             long hits = HookState.hitCount(feature);
             if (hits > 0) {
                 out.put(ReportProtocol.PREFIX_HIT + feature.key, String.valueOf(hits));
+            }
+            long errors = HookState.errorCount(feature);
+            if (errors > 0) {
+                out.put(ReportProtocol.PREFIX_ERR + feature.key, String.valueOf(errors));
             }
             out.put(ReportProtocol.PREFIX_SKIP + feature.key,
                     truncate(HookState.skipReason(feature)));

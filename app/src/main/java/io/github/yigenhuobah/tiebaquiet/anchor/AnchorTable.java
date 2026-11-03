@@ -1,5 +1,7 @@
 package io.github.yigenhuobah.tiebaquiet.anchor;
 
+import android.util.Log;
+
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -10,6 +12,7 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -20,12 +23,61 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class AnchorTable {
 
+    private static final String TAG = "TiebaQuiet";
+
+    /** 日志出口：单测可替换为抛异常实现，验证日志失败不影响锚点解析（fail-open）。 */
+    interface LogSink {
+        void warn(String tag, String message);
+    }
+
+    private static final LogSink DEFAULT_LOG_SINK = (tag, message) -> Log.w(tag, message);
+    private static volatile LogSink logSink = DEFAULT_LOG_SINK;
+
+    /** 仅供 JVM 单测：替换日志出口，传 null 恢复默认。 */
+    static void setLogSinkForTest(LogSink sink) {
+        logSink = sink == null ? DEFAULT_LOG_SINK : sink;
+    }
+
+    /**
+     * 锚点解析失败类别：WARN 日志与单测共用，避免“只返回 null”无法定位问题。
+     * 标签是 logcat 英文文案（DESIGN.md §10），保持小写、可 grep。
+     */
+    enum Failure {
+        MISSING_KEY("missing key"),
+        CLASS_NOT_FOUND("class not found"),
+        METHOD_NOT_FOUND("method not found"),
+        SIGNATURE_MISMATCH("signature mismatch"),
+        RETURN_TYPE_MISMATCH("return type mismatch"),
+        ERROR("resolve error");
+
+        final String label;
+
+        Failure(String label) {
+            this.label = label;
+        }
+    }
+
+    /** 解析结果：成功时 value 非 null、failure 为 null；失败时反之。 */
+    static final class Lookup<T> {
+        final T value;
+        final Failure failure;
+        final Throwable error;
+
+        Lookup(T value, Failure failure, Throwable error) {
+            this.value = value;
+            this.failure = failure;
+            this.error = error;
+        }
+    }
+
     private final String appVersion;
     private final long versionCode;
     private final JSONObject root;
     private final ClassLoader loader;
     private final ConcurrentHashMap<String, Method> methodCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Class<?>> classCache = new ConcurrentHashMap<>();
+    /** 已写过的 WARN 文案：同一失败只记一次，避免信息流逐条判定时刷屏。 */
+    private final Set<String> warned = ConcurrentHashMap.newKeySet();
 
     private AnchorTable(String appVersion, long versionCode, JSONObject root,
                         ClassLoader loader) {
@@ -51,29 +103,25 @@ public final class AnchorTable {
         try {
             JSONObject anchors = root.optJSONObject("anchors");
             if (anchors == null) {
+                warn(key, Failure.MISSING_KEY, "missing anchors section", null);
                 return null;
             }
             JSONObject entry = anchors.optJSONObject(key);
             if (entry == null) {
+                warn(key, Failure.MISSING_KEY, "missing anchor entry", null);
                 return null;
             }
-            Class<?> cls = loadClass(entry.optString("c"));
-            if (cls == null) {
+            Lookup<Method> lookup = resolveMethod(this, loader, key, entry.optString("c"),
+                    entry.optString("m"), entry.optString("s"));
+            if (lookup.value == null) {
+                // 失败原因已由 resolveMethod 写 WARN；保持 fail-open，下次仍会重试。
                 return null;
             }
-            String name = entry.optString("m");
-            String signature = entry.optString("s");
-            Class<?>[] params = parseParameterTypes(signature, loader);
-            Method method = cls.getDeclaredMethod(name, params);
-            if (!returnTypeMatches(method, signature, loader)) {
-                // 同名同参但返回类型已变：混淆方法语义已变，按锚点缺失跳过
-                // 而不是照常 hook（返回类型不缓存，下次仍会重试）。
-                return null;
-            }
-            method.setAccessible(true);
-            methodCache.put(key, method);
-            return method;
+            lookup.value.setAccessible(true);
+            methodCache.put(key, lookup.value);
+            return lookup.value;
         } catch (Throwable t) {
+            warn(key, Failure.ERROR, "anchor resolve error", t);
             return null;
         }
     }
@@ -86,20 +134,143 @@ public final class AnchorTable {
         try {
             JSONObject classes = root.optJSONObject("classes");
             if (classes == null) {
+                warn(key, Failure.MISSING_KEY, "missing classes section", null);
                 return null;
             }
             String name = classes.optString(key, "");
             if (name.isEmpty()) {
+                warn(key, Failure.MISSING_KEY, "missing class entry", null);
                 return null;
             }
-            Class<?> cls = loadClass(name);
-            if (cls != null) {
-                classCache.put(key, cls);
+            Lookup<Class<?>> lookup = resolveClass(this, loader, key, name);
+            if (lookup.value != null) {
+                classCache.put(key, lookup.value);
             }
-            return cls;
+            return lookup.value;
         } catch (Throwable t) {
+            warn(key, Failure.ERROR, "class anchor resolve error", t);
             return null;
         }
+    }
+
+    /**
+     * 解析目标类：类不存在、类名为空与其它反射异常分别记录 WARN。
+     * 静态方法便于 JVM 单测直接覆盖失败原因，不依赖 JSON。
+     */
+    static Lookup<Class<?>> resolveClass(ClassLoader loader, String key, String className) {
+        return resolveClass(null, loader, key, className);
+    }
+
+    private static Lookup<Class<?>> resolveClass(AnchorTable owner, ClassLoader loader,
+                                                 String key, String className) {
+        if (className == null || className.isEmpty()) {
+            warn(owner, key, Failure.MISSING_KEY, "empty class name", null);
+            return new Lookup<>(null, Failure.MISSING_KEY, null);
+        }
+        try {
+            return new Lookup<>(Class.forName(className, false, loader), null, null);
+        } catch (ClassNotFoundException e) {
+            warn(owner, key, Failure.CLASS_NOT_FOUND, className, e);
+            return new Lookup<>(null, Failure.CLASS_NOT_FOUND, e);
+        } catch (Throwable t) {
+            warn(owner, key, Failure.ERROR, className, t);
+            return new Lookup<>(null, Failure.ERROR, t);
+        }
+    }
+
+    /**
+     * 解析目标方法：依次校验类、方法名、参数描述符与返回类型，失败时返回具体类别。
+     * 所有失败路径都只返回 null（fail-open），由调用方按锚点缺失跳过。
+     */
+    static Lookup<Method> resolveMethod(ClassLoader loader, String key, String className,
+                                        String methodName, String signature) {
+        return resolveMethod(null, loader, key, className, methodName, signature);
+    }
+
+    private static Lookup<Method> resolveMethod(AnchorTable owner, ClassLoader loader,
+                                                String key, String className,
+                                                String methodName, String signature) {
+        Lookup<Class<?>> classLookup = resolveClass(owner, loader, key, className);
+        if (classLookup.value == null) {
+            return new Lookup<>(null, classLookup.failure, classLookup.error);
+        }
+        if (methodName == null || methodName.isEmpty()) {
+            warn(owner, key, Failure.MISSING_KEY, "empty method name", null);
+            return new Lookup<>(null, Failure.MISSING_KEY, null);
+        }
+        Class<?>[] params;
+        try {
+            params = parseParameterTypes(signature, loader);
+        } catch (Throwable t) {
+            warn(owner, key, Failure.SIGNATURE_MISMATCH, signature, t);
+            return new Lookup<>(null, Failure.SIGNATURE_MISMATCH, t);
+        }
+        Method method;
+        try {
+            method = classLookup.value.getDeclaredMethod(methodName, params);
+        } catch (NoSuchMethodException e) {
+            warn(owner, key, Failure.METHOD_NOT_FOUND, methodName + signature, e);
+            return new Lookup<>(null, Failure.METHOD_NOT_FOUND, e);
+        } catch (Throwable t) {
+            warn(owner, key, Failure.ERROR, methodName + signature, t);
+            return new Lookup<>(null, Failure.ERROR, t);
+        }
+        Class<?> returnType;
+        try {
+            returnType = parseReturnType(signature, loader);
+        } catch (Throwable t) {
+            warn(owner, key, Failure.SIGNATURE_MISMATCH, signature, t);
+            return new Lookup<>(null, Failure.SIGNATURE_MISMATCH, t);
+        }
+        if (method.getReturnType() != returnType) {
+            // 同名同参但返回类型已变：混淆方法语义已变，按锚点缺失跳过
+            // 而不是照常 hook（返回类型不缓存，下次仍会重试）。
+            warn(owner, key, Failure.RETURN_TYPE_MISMATCH,
+                    signature + " expected " + returnType.getName()
+                            + " actual " + method.getReturnType().getName(), null);
+            return new Lookup<>(null, Failure.RETURN_TYPE_MISMATCH, null);
+        }
+        return new Lookup<>(method, null, null);
+    }
+
+    /** 统一 WARN 文案（英文、可 grep）：锚点 key + 失败类别 + 细节 + 异常类型。 */
+    static String failureMessage(String key, Failure failure, String detail, Throwable error) {
+        StringBuilder sb = new StringBuilder("anchor ").append(key)
+                .append(' ').append(failure.label);
+        if (detail != null && !detail.isEmpty()) {
+            sb.append(": ").append(detail);
+        }
+        if (error != null) {
+            sb.append(" [").append(error.getClass().getName()).append(']');
+        }
+        return sb.toString();
+    }
+
+    private void warn(String key, Failure failure, String detail, Throwable error) {
+        warn(this, key, failure, detail, error);
+    }
+
+    /**
+     * 只记录一次完整文案，不打印异常栈：{@link #failureMessage} 已带异常类型，
+     * 同一锚点在信息流逐条判定中会反复解析失败，重复 WARN 只会刷屏。
+     */
+    private static void warn(AnchorTable owner, String key, Failure failure,
+                             String detail, Throwable error) {
+        try {
+            String message = failureMessage(key, failure, detail, error);
+            if (owner != null && !owner.warned.add(message)) {
+                return;
+            }
+            logSink.warn(TAG, message);
+        } catch (Throwable ignored) {
+            // 日志实现异常绝不能影响解析返回值：warn 常在 resolve 的 catch 块里调用，
+            // 一旦逃逸会让 method()/clazz() 抛异常而不是 fail-open 返回 null。
+        }
+    }
+
+    /** 仅供 JVM 单测：已记录过的 WARN 文案数量。 */
+    int warnedCount() {
+        return warned.size();
     }
 
     public boolean isSupportedVersion(String installedVersion) {
@@ -109,14 +280,6 @@ public final class AnchorTable {
     /** 版本门禁规则：未知版本 fail-open；已知版本必须精确匹配。 */
     static boolean isSupportedVersion(String expectedVersion, String installedVersion) {
         return installedVersion == null || installedVersion.equals(expectedVersion);
-    }
-
-    private Class<?> loadClass(String name) {
-        try {
-            return Class.forName(name, false, loader);
-        } catch (Throwable t) {
-            return null;
-        }
     }
 
     public static AnchorTable load(ClassLoader loader) {

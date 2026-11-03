@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 0.3.4 - 2026-11-03
+
+### 修复
+
+- **锚点失败可见**：`AnchorTable` 区分 missing key / class not found / method not found / signature mismatch / return type mismatch / resolve error，WARN 带 key 与异常类型；日志出口加 try/catch，同一文案只打一次，避免信息流逐条刷屏。
+- **hook 体异常计数**：`Feature.wrapHit` 先执行 delegate，成功才计 hit；hook 体异常记 `err.<key>` 并保留 fail-open；宿主方法从 `chain.proceed()` 抛出的异常不计 hook 错误。
+- **transform 异常不误报**：after hook 的 transform 异常只 WARN、不计 err，避免瞬时失败永久标失败。
+- **锚点表版本校验**：`verify-apk.sh` 校验 APK 内 `anchors.json` 的 `appVersion == ConfigStore.TARGET_VERSION`。
+
+### 变更
+
+- 依赖对齐：AppCompat 1.8.0 / Material 1.14.0（0.3.3 未发版的部分随本版生效）。
+
 ## 0.3.3 - 2026-11-01
 
 诊断轮（内置诊断 + 对齐，27 项工作项全修）。明细见本文件对应条目与仓库提交记录。

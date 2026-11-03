@@ -135,7 +135,7 @@ public final class Phase2Features {
             @Override
             public Object intercept(XposedInterface.Chain chain) throws Throwable {
                 Object builder = chain.getArgs().size() > 0 ? chain.getArgs().get(0) : null;
-                Object result = chain.proceed();
+                Object result = Feature.proceed(chain);
                 try {
                     if (builder != null) {
                         Field field = builder.getClass().getField("lz");
@@ -156,7 +156,7 @@ public final class Phase2Features {
             @Override
             public Object intercept(XposedInterface.Chain chain) throws Throwable {
                 Object builder = chain.getArgs().size() > 0 ? chain.getArgs().get(0) : null;
-                Object result = chain.proceed();
+                Object result = Feature.proceed(chain);
                 try {
                     if (builder != null) {
                         Field field = builder.getClass().getField("r");
@@ -196,7 +196,7 @@ public final class Phase2Features {
                     sLastVideoUrl = url;
                     copyToClipboard(url);
                 }
-                return chain.proceed();
+                return Feature.proceed(chain);
             }
         });
     }

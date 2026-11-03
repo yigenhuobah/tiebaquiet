@@ -99,7 +99,7 @@ public final class Phase1Features {
                 if (filtered != null && filtered != original) {
                     out[0] = filtered;
                 }
-                return chain.proceed(out);
+                return Feature.proceed(chain, out);
             }
         });
     }
@@ -170,7 +170,7 @@ public final class Phase1Features {
                         out[1] = reordered;
                     }
                 }
-                return chain.proceed(out);
+                return Feature.proceed(chain, out);
             }
         });
     }
@@ -209,7 +209,7 @@ public final class Phase1Features {
                             }
                             // 直播卡由多个组件拼成，数据层删不干净，视图层再按卡片数据整卡隐藏。
                             FeedCardSweeper.schedule(env, adapter, true, false);
-                            return chain.proceed(out);
+                            return Feature.proceed(chain, out);
                         }
                     });
             any = any || installed;
@@ -243,7 +243,7 @@ public final class Phase1Features {
                             env.module.log(Log.INFO, Feature.TAG,
                                     f.code + " live filter: attention card bind");
                             Object view = chain.getThisObject();
-                            Object result = chain.proceed();
+                            Object result = Feature.proceed(chain);
                             hideView(view);
                             return result;
                         }
@@ -277,7 +277,7 @@ public final class Phase1Features {
                 @Override
                 public Object intercept(XposedInterface.Chain chain) throws Throwable {
                     Object view = chain.getThisObject();
-                    Object result = chain.proceed();
+                    Object result = Feature.proceed(chain);
                     hideView(view);
                     return result;
                 }
@@ -296,7 +296,7 @@ public final class Phase1Features {
             public Object intercept(XposedInterface.Chain chain) throws Throwable {
                 // 与直播卡共用一条按 adapter 去重的 sweep 链，只合并热点策略。
                 FeedCardSweeper.schedule(env, chain.getThisObject(), false, true);
-                return chain.proceed();
+                return Feature.proceed(chain);
             }
         });
     }
@@ -326,7 +326,7 @@ public final class Phase1Features {
             @Override
             public Object intercept(XposedInterface.Chain chain) throws Throwable {
                 final Object controller = chain.getThisObject();
-                Object result = chain.proceed();
+                Object result = Feature.proceed(chain);
                 if (controller != null) {
                     env.module.log(Log.INFO, Feature.TAG,
                             f.code + " profile cleanup: controller attached");

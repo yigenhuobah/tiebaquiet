@@ -27,6 +27,7 @@ public class ReportProtocolTest {
     public void validKeyAcceptsRepresentativePrefixes() {
         assertTrue(ReportProtocol.validKey("reg.splash_no_ad"));
         assertTrue(ReportProtocol.validKey("hit.ad_request_block"));
+        assertTrue(ReportProtocol.validKey("err.ad_request_block"));
         assertTrue(ReportProtocol.validKey("skip.keep_alive_block"));
     }
 
@@ -36,13 +37,14 @@ public class ReportProtocolTest {
         for (Feature f : FeatureRegistry.all()) {
             assertTrue(ReportProtocol.validKey(ReportProtocol.PREFIX_REG + f.key));
             assertTrue(ReportProtocol.validKey(ReportProtocol.PREFIX_HIT + f.key));
+            assertTrue(ReportProtocol.validKey(ReportProtocol.PREFIX_ERR + f.key));
             assertTrue(ReportProtocol.validKey(ReportProtocol.PREFIX_SKIP + f.key));
             assertTrue(ReportProtocol.validKey(ReportProtocol.PREFIX_CRIT + f.key));
-            count += 4;
+            count += 5;
         }
         count += 2; // meta.session / meta.updated_at
         count += 3; // crash0 / crash1 / crash2
-        assertEquals(105, count);
+        assertEquals(130, count);
     }
 
     @Test
@@ -143,6 +145,17 @@ public class ReportProtocolTest {
         assertTrue(ReportProtocol.featureFailed("template_set_list", "无可用锚点", true, 0L));
         assertTrue(ReportProtocol.featureFailed("template_set_list", "无可用锚点", true, 5L));
         assertTrue(ReportProtocol.featureFailed("", "", true, 0L));
+    }
+
+    /** hook 体异常：即使有成功注册标签、hit &gt; 0，只要 err &gt; 0 就必须计入失败。 */
+    @Test
+    public void hookBodyErrorsAreFailureEvenWithRegistration() {
+        assertTrue(ReportProtocol.featureFailed("template_set_list", "", false, 3L, 1L));
+        assertTrue(ReportProtocol.featureFailed("a|b", "方法未找到 x", false, 0L, 2L));
+        assertFalse("err=0 时仍按原规则：有注册标签不算失败",
+                ReportProtocol.featureFailed("template_set_list", "", false, 3L, 0L));
+        assertFalse("无回传且无错误不计入",
+                ReportProtocol.featureFailed(null, null, false, 0L, 0L));
     }
 
     @Test

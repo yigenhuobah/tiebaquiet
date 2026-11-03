@@ -96,6 +96,22 @@ public class ReportTest {
         assertEquals("", snap.get(ReportProtocol.PREFIX_CRIT + f.key));
     }
 
+    /** hook 体异常计数：err 只在 &gt; 0 时回传，且与 hit 分开统计。 */
+    @Test
+    public void snapshotCarriesHookBodyErrorCount() {
+        Feature f = feature("personalized_ad_off");
+        long baseErrors = HookState.errorCount(f);
+        long baseHits = HookState.hitCount(f);
+        HookState.error(f);
+        HookState.error(f);
+
+        Map<String, String> snap = Report.snapshot();
+
+        assertEquals("2 次 hook 体异常必须回传累计 err", String.valueOf(baseErrors + 2L),
+                snap.get(ReportProtocol.PREFIX_ERR + f.key));
+        assertEquals("异常不能算命中", baseHits, HookState.hitCount(f));
+    }
+
     @Test
     public void snapshotCarriesStableSessionAndUpdatedAt() {
         Map<String, String> first = Report.snapshot();

@@ -22,6 +22,8 @@ public class DiagnosticsFragmentTest {
                 DiagnosticsFragment.reportReported("", "锚点缺失 x", 0L, true));
         assertTrue("仅 hit 也算有数据",
                 DiagnosticsFragment.reportReported(null, null, 3L, true));
+        assertTrue("仅 hook 体错误也算有数据",
+                DiagnosticsFragment.reportReported(null, null, 0L, 2L, true));
     }
 
     @Test
@@ -30,6 +32,8 @@ public class DiagnosticsFragmentTest {
                 DiagnosticsFragment.reportReported(null, null, 0L, true));
         assertFalse("空串不算有数据",
                 DiagnosticsFragment.reportReported("", "", 0L, true));
+        assertFalse("err=0 不算有数据",
+                DiagnosticsFragment.reportReported(null, null, 0L, 0L, true));
     }
 
     @Test
@@ -40,5 +44,7 @@ public class DiagnosticsFragmentTest {
                 DiagnosticsFragment.reportReported("", "锚点缺失 x", 0L, false));
         assertFalse("过期回传：有 hit 也不算有数据",
                 DiagnosticsFragment.reportReported(null, null, 9L, false));
+        assertFalse("过期回传：有 err 也不算有数据",
+                DiagnosticsFragment.reportReported(null, null, 0L, 4L, false));
     }
 }

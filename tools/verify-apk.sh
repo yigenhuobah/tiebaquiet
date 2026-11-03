@@ -12,6 +12,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 GRADLE_FILE="$ROOT_DIR/app/build.gradle"
+CONFIG_STORE="$ROOT_DIR/app/src/main/java/io/github/yigenhuobah/tiebaquiet/ConfigStore.java"
 
 EXPECTED_CERT_SHA256="2453a611bb3eeff59489fd1d0578ca12be858f578ec86e0ec8a25176554fc071"
 EXPECTED_SCOPE="com.baidu.tieba"
@@ -27,6 +28,7 @@ EXPECTED_VERSION=""
 EXPECTED_CODE=""
 OUT_DIR=""
 FAILED=0
+PYTHON_BIN="$(command -v python3 || command -v python || true)"
 
 usage() {
     sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -296,6 +298,26 @@ if [ "$ACTUAL_VERSION" = "$EXPECTED_VERSION" ]; then
     ok "versionName=$ACTUAL_VERSION"
 else
     bad "versionName 期望 $EXPECTED_VERSION，实际 '${ACTUAL_VERSION:-<未知>}'"
+fi
+
+# 6b. APK 内 anchors.json 必须存在且版本与本次发布一致。
+# 改了目标版本却忘记重新生成锚点表时，运行时会全部 fail-open；这里在发版前硬失败。
+if [ ! -f "$TMP_DIR/anchors.json" ]; then
+    bad "APK 内缺少 anchors.json（锚点表未打包，运行时会全部 fail-open）"
+elif [ -z "$PYTHON_BIN" ]; then
+    bad "未找到 python3/python，无法校验 anchors.json 版本"
+else
+    ANCHORS_VERSION="$("$PYTHON_BIN" -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("appVersion",""))' "$TMP_DIR/anchors.json" 2>/dev/null || true)"
+    ANCHORS_CODE="$("$PYTHON_BIN" -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("versionCode",""))' "$TMP_DIR/anchors.json" 2>/dev/null || true)"
+    TARGET_VERSION="$(sed -nE 's/.*TARGET_VERSION[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' "$CONFIG_STORE" | head -1)"
+    if [ -z "$TARGET_VERSION" ]; then
+        bad "无法从 ConfigStore.java 读取 TARGET_VERSION"
+    elif [ "$ANCHORS_VERSION" = "$TARGET_VERSION" ]; then
+        ok "anchors.json appVersion=$ANCHORS_VERSION (target)"
+    else
+        bad "anchors.json appVersion 期望目标应用版本 $TARGET_VERSION，实际 '${ANCHORS_VERSION:-<未找到>}'"
+    fi
+    ok "anchors.json versionCode=${ANCHORS_CODE:-<未提供>}"
 fi
 
 # 7. 签名证书 SHA-256

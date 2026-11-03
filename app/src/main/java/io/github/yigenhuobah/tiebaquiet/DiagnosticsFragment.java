@@ -27,7 +27,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 /**
- * 诊断页：逐功能显示 registered / hit / skip。
+ * 诊断页：逐功能显示 registered / hit / err / skip。
  *
  * <p>主页面零诊断，所有细节集中在这里。数据由目标进程的 HookState 经
  * hooks/Report 回传到 StatusProvider，再落到 {@code tq_report}。
@@ -244,6 +244,10 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
         StringBuilder sb = new StringBuilder();
         sb.append(hasReg ? "registered" : dash);
         sb.append(" · hit ").append(data.hit);
+        // 错误只在 >0 时展示，避免正常功能行被 “err 0” 干扰；出现即说明 hook 体抛过异常。
+        if (data.err > 0) {
+            sb.append(" · err ").append(data.err);
+        }
         sb.append(" · skip ").append(hasSkip ? data.skip : dash);
         return sb.toString();
     }
@@ -409,15 +413,16 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
         boolean hasData = false;
         for (Feature f : FeatureRegistry.all()) {
             if (f.blocked()) {
-                rows.put(f.key, new RowData(null, null, 0L, true));
+                rows.put(f.key, new RowData(null, null, 0L, 0L, true));
                 hasData = true;
                 continue;
             }
             String reg = StatusProvider.reportString(context, StatusProvider.PREFIX_REG, f.key);
             long hit = StatusProvider.reportHit(context, f.key);
+            long err = StatusProvider.reportError(context, f.key);
             String skip = StatusProvider.reportString(context, StatusProvider.PREFIX_SKIP, f.key);
-            boolean reported = reportReported(reg, skip, hit, fresh);
-            rows.put(f.key, new RowData(reg, skip, hit, reported));
+            boolean reported = reportReported(reg, skip, hit, err, fresh);
+            rows.put(f.key, new RowData(reg, skip, hit, err, reported));
             if (reported) {
                 hasData = true;
             }
@@ -450,12 +455,18 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
      * registered/hit/skip 当作当前状态，与主页失败横幅的过期语义保持一致。
      */
     static boolean reportReported(String reg, String skip, long hit, boolean fresh) {
+        return reportReported(reg, skip, hit, 0L, fresh);
+    }
+
+    /** 带 hook 体错误计数的“有数据”判定：仅有 err 回传也算有数据。 */
+    static boolean reportReported(String reg, String skip, long hit, long err, boolean fresh) {
         if (!fresh) {
             return false;
         }
         return (reg != null && !reg.isEmpty())
                 || (skip != null && !skip.isEmpty())
-                || hit > 0;
+                || hit > 0
+                || err > 0;
     }
 
     /** 单功能的后台读取结果。 */
@@ -463,12 +474,14 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
         final String reg;
         final String skip;
         final long hit;
+        final long err;
         final boolean reported;
 
-        RowData(String reg, String skip, long hit, boolean reported) {
+        RowData(String reg, String skip, long hit, long err, boolean reported) {
             this.reg = reg;
             this.skip = skip;
             this.hit = hit;
+            this.err = err;
             this.reported = reported;
         }
     }

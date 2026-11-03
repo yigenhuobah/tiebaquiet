@@ -5,7 +5,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * 诊断回传通道的纯 Java 协议逻辑：键白名单、取值长度、命中计数合并、
+ * 诊断回传通道的纯 Java 协议逻辑：键白名单、取值长度、命中/错误计数合并、
  * 会话/新鲜度判定与失败语义。
  *
  * <p>不依赖任何 android.*，可直接在 JVM 单测（见 ReportProtocolTest）；
@@ -15,6 +15,8 @@ public final class ReportProtocol {
 
     public static final String PREFIX_REG = "reg.";
     public static final String PREFIX_HIT = "hit.";
+    /** hook 体异常计数（不含宿主 chain.proceed 异常）：err&gt;0 时该功能计入失败横幅。 */
+    public static final String PREFIX_ERR = "err.";
     public static final String PREFIX_SKIP = "skip.";
     /** 主锚点缺失标记：crit=1 时该功能计入失败横幅。 */
     public static final String PREFIX_CRIT = "crit.";
@@ -37,7 +39,7 @@ public final class ReportProtocol {
     /** 未来时间戳容忍上限：updatedAt 领先 now 超过该值视为时钟回拨/异常，直接判过期。 */
     public static final long MAX_FUTURE_SKEW_MS = 5 * 60 * 1000L;
 
-    /** 25 个 Feature × 4 个前缀 + 2 个 meta 键 + 3 个 crash 键，构建后不可变。 */
+    /** 25 个 Feature × 5 个前缀 + 2 个 meta 键 + 3 个 crash 键，构建后不可变。 */
     private static final Set<String> ALLOWED_KEYS = buildAllowedKeys();
 
     private ReportProtocol() {
@@ -48,6 +50,7 @@ public final class ReportProtocol {
         for (Feature feature : FeatureRegistry.all()) {
             keys.add(PREFIX_REG + feature.key);
             keys.add(PREFIX_HIT + feature.key);
+            keys.add(PREFIX_ERR + feature.key);
             keys.add(PREFIX_SKIP + feature.key);
             keys.add(PREFIX_CRIT + feature.key);
         }
@@ -90,22 +93,31 @@ public final class ReportProtocol {
         return next;
     }
 
-    /** 已启用功能是否有回传（reg/skip 非空、critical 标记或 hit &gt; 0）。 */
-    private static boolean reported(String reg, String skip, boolean criticalSkip, long hit) {
-        return !isEmpty(reg) || !isEmpty(skip) || criticalSkip || hit > 0L;
+    /** 已启用功能是否有回传（reg/skip 非空、critical 标记、hit 或 err &gt; 0）。 */
+    private static boolean reported(String reg, String skip, boolean criticalSkip,
+                                    long hit, long errors) {
+        return !isEmpty(reg) || !isEmpty(skip) || criticalSkip || hit > 0L || errors > 0L;
     }
 
     /**
-     * 已启用且有回传的功能是否明确失败：reg 为空或存在 critical 标记。
+     * 已启用且有回传的功能是否明确失败：reg 为空、存在 critical 标记，
+     * 或 hook 体已记录错误（err &gt; 0，不含宿主 proceed 异常）。
      *
      * <p>普通 skip 只用于诊断展示，不再计入失败：零安装规则下
-     * “有注册标签 + 部分锚点缺失”属于部分可用，不应把整个功能判死。
+     * “有注册标签 + 部分锚点缺失”属于部分可用，不应把整个功能判死；
+     * 但 hook 体反复抛异常说明功能实际不可用，必须计入失败横幅。
      */
     public static boolean featureFailed(String reg, String skip, boolean criticalSkip, long hit) {
-        if (!reported(reg, skip, criticalSkip, hit)) {
+        return featureFailed(reg, skip, criticalSkip, hit, 0L);
+    }
+
+    /** 带 hook 体错误计数的失败判定（见 {@link #PREFIX_ERR}）。 */
+    public static boolean featureFailed(String reg, String skip, boolean criticalSkip,
+                                        long hit, long errors) {
+        if (!reported(reg, skip, criticalSkip, hit, errors)) {
             return false;
         }
-        return isEmpty(reg) || criticalSkip;
+        return isEmpty(reg) || criticalSkip || errors > 0L;
     }
 
     /** crit 值固定为 "1"；其余（空串/缺失/旧数据）都按可选处理。 */
