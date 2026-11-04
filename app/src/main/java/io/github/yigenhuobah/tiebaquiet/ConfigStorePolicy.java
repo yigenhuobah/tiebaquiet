@@ -1,10 +1,14 @@
 package io.github.yigenhuobah.tiebaquiet;
 
+import io.github.yigenhuobah.core.ConfigPolicy;
+
 /**
- * {@link ConfigStore} 的纯决策逻辑，不依赖 Android，便于 JVM 单元测试。
+ * {@link ConfigStore} 的纯决策逻辑适配器。
  *
- * <p>把“是否接受写入”“旧 group 是否兜底”“commit 结果如何判定”“store 是否复用”
- * 从 Android 胶水里抽出来，避免这些边界只能靠真机验证。
+ * <p>判定规则（remote 可用性、新/旧 group 的 commit 兜底、store 复用）全部由
+ * core 的 {@link ConfigPolicy} 承担；本类只保留模块既有的静态方法名，避免
+ * ConfigStore 调用点改动。Android 胶水层不参与判定，因此这些边界仍可由
+ * 纯 JVM 单测锁死（见 ConfigStorePolicyTest）。
  */
 public final class ConfigStorePolicy {
 
@@ -18,7 +22,7 @@ public final class ConfigStorePolicy {
      * 静默成功，否则设置页显示已保存、贴吧进程却读不到。
      */
     public static boolean canWrite(boolean newGroupAvailable, boolean legacyGroupAvailable) {
-        return newGroupAvailable || legacyGroupAvailable;
+        return ConfigPolicy.canWrite(newGroupAvailable, legacyGroupAvailable);
     }
 
     /**
@@ -34,10 +38,7 @@ public final class ConfigStorePolicy {
      */
     public static boolean committed(boolean newGroupCommitted, boolean legacyGroupCommitted,
                                     boolean newGroupHadValue) {
-        if (newGroupCommitted) {
-            return true;
-        }
-        return legacyGroupCommitted && !newGroupHadValue;
+        return ConfigPolicy.committed(newGroupCommitted, legacyGroupCommitted, newGroupHadValue);
     }
 
     /**
@@ -45,6 +46,6 @@ public final class ConfigStorePolicy {
      * service 绑定/断开/重连或尚无 store 时必须重建。
      */
     public static boolean reuseStore(boolean hasStore, Object cachedService, Object currentService) {
-        return hasStore && cachedService == currentService;
+        return ConfigPolicy.reuseStore(hasStore, cachedService, currentService);
     }
 }

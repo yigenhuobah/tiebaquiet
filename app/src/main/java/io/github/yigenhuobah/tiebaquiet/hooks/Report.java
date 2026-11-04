@@ -15,6 +15,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
+import io.github.yigenhuobah.core.CrashFlush;
+import io.github.yigenhuobah.core.Logger;
 import io.github.yigenhuobah.tiebaquiet.Feature;
 import io.github.yigenhuobah.tiebaquiet.HookState;
 import io.github.yigenhuobah.tiebaquiet.ReportProtocol;
@@ -39,7 +41,9 @@ import io.github.yigenhuobah.tiebaquiet.StatusProvider;
  *
  * <p>内置诊断：主进程启动时幂等包装默认 UEH（{@link #installCrashHandler}），
  * 记录目标进程最近崩溃（进程内环形缓冲，snapshot 打平为 crash0/crash1/crash2）；
- * 先写崩溃再透传 previous，绝不改变目标 App 原有的异常处理行为。
+ * 先写崩溃，再用 {@link CrashFlush#runBestEffort(Runnable, long, Logger, String)}
+ * 在 200ms 预算内同步 {@link #flushNow()} 一次，最后透传 previous，绝不改变
+ * 目标 App 原有的异常处理行为。
  */
 public final class Report {
 
@@ -48,6 +52,20 @@ public final class Report {
     private static final long INITIAL_DELAY_SECONDS = 2L;
     private static final long PERIOD_SECONDS = 3L;
     private static final long BACKOFF_MS = 60_000L;
+
+    /**
+     * 崩溃 flush 的 core 日志适配器：core 的等级常量与 android.util.Log 一致，
+     * 直接把等级/标签/正文转给 {@link Log#println(int, String, String)}；有异常时
+     * 附上堆栈文本，保证超时与任务异常以 WARN 落进目标进程日志。日志实现自身
+     * 抛出的异常由 core 的 CrashFlush 吞掉，不能影响崩溃路径。
+     */
+    private static final Logger CRASH_LOGGER = (level, tag, message, t) -> {
+        if (t == null) {
+            Log.println(level, tag, message);
+        } else {
+            Log.println(level, tag, message + '\n' + Log.getStackTraceString(t));
+        }
+    };
 
     /** 单条崩溃文本上限：在 MAX_VALUE=256 之内留键名与通道开销余量。 */
     private static final int MAX_CRASH_CHARS = 240;
@@ -113,9 +131,10 @@ public final class Report {
 
     /**
      * 幂等包装默认 UEH：previous 先保存，自定义 handler 内先记录崩溃（见
-     * {@link #recordCrash}）再透传 previous（非空时），全程 try/catch——绝不因
-     * 我们抛异常、绝不改变目标 App 原有的异常处理行为。{@link #sCrashHandlerInstalled}
-     * 保证只包一次。public static：由 TiebaQuietModule 在主进程 Report.start() 的
+     * {@link #recordCrash}），再在有限时间内同步 flush 一次（见 {@link #flushNow}），
+     * 最后透传 previous（非空时），全程 try/catch——绝不因我们抛异常、绝不改变
+     * 目标 App 原有的异常处理行为。{@link #sCrashHandlerInstalled} 保证只包一次。
+     * public static：由 TiebaQuietModule 在主进程 Report.start() 的
      * 调用点一并接入；JVM 单测直接验证幂等与记录语义（见 ReportTest）。
      */
     public static synchronized void installCrashHandler() {
@@ -130,6 +149,14 @@ public final class Report {
             public void uncaughtException(Thread thread, Throwable throwable) {
                 try {
                     recordCrash(thread, throwable);
+                } catch (Throwable ignored) {
+                }
+                try {
+                    // ALL-CRASH-01：崩溃路径同步收尾。CrashFlush 自带 daemon 线程、
+                    // 200ms 超时与 Throwable 兜底；runBestEffort 把超时/任务异常以
+                    // WARN 写入 CRASH_LOGGER，这里再包一层，确保任何意外都不会
+                    // 阻断下面的 previous 透传。
+                    CrashFlush.runBestEffort(() -> Report.flushNow(), 200, CRASH_LOGGER, TAG);
                 } catch (Throwable ignored) {
                 }
                 if (previous != null) {
@@ -207,13 +234,35 @@ public final class Report {
     }
 
     private static void flush() {
+        try {
+            flush(false);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 同步 flush：崩溃路径专用（ALL-CRASH-01）。跳过节流与失败退避，立即把当前
+     * 快照（含刚记录的 crash0）交给 provider；provider 的
+     * {@link StatusProvider#call} 用 {@code commit()} 同步落盘，本方法不调用
+     * {@code apply()}。任何异常都在这里吞掉——UEH 路径绝不能被诊断回传拖垮。
+     */
+    static void flushNow() {
+        try {
+            flush(true);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void flush(boolean force) {
         Map<String, String> batch = snapshot();
         long now = System.currentTimeMillis();
-        if (!shouldSend(batch, sLast, now, sLastSentAt)) {
-            return;
-        }
-        if (now < sNextTry) {
-            return;
+        if (!force) {
+            if (!shouldSend(batch, sLast, now, sLastSentAt)) {
+                return;
+            }
+            if (now < sNextTry) {
+                return;
+            }
         }
         Context context = context();
         if (context == null) {
@@ -257,7 +306,9 @@ public final class Report {
      *
      * <p>reg / skip / crit 对每个 touched Feature 都必须发送，缺失时发空串：
      * StatusProvider 用最新值覆盖旧值，只有空串才能清掉上一次目标进程会话遗留的
-     * skip/crit。hit/err 只在 &gt; 0 时发送，由 provider 取会话内最大值；
+     * skip/crit。skip 沿用旧协议，只发 {@link HookState#skipReason}（最后一条原因），
+     * 不合并摘要；{@link HookState#skipSummary} 仅用于诊断页展示。hit/err 只在
+     * &gt; 0 时发送，由 provider 取会话内最大值；
      * 新会话清库已能清掉旧值，且两者都只增不减。
      * crash0/1/2（0 最新，来自进程内崩溃环）始终发送、无崩溃发空串：与 reg/skip
      * 同一清残留机制，单条已在记录时截断到 240（≤ MAX_VALUE）。

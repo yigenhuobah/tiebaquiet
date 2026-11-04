@@ -92,12 +92,16 @@ dependencies {
     // Module app side: XposedService / RemotePreferences client; must be packaged.
     implementation 'io.github.libxposed:service:102.0.0'
 
+    // 四模块共用的纯 JVM 核心库（Gradle 复合构建）。
+    implementation 'io.github.yigenhuobah:core:0.1.0'
+
     // Java/XML UI 基线依赖。
     implementation 'androidx.appcompat:appcompat:1.8.0'
     implementation 'com.google.android.material:material:1.14.0'
     implementation 'androidx.preference:preference:1.2.1'
 
     testImplementation 'junit:junit:4.13.2'
+    testImplementation 'io.github.yigenhuobah:core-test:0.1.0'
     // Feature 类的方法签名引用 libxposed API；纯 JVM 单测需要它在测试运行时可见。
     testImplementation 'io.github.libxposed:api:102.0.0'
 }

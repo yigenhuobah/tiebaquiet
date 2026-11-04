@@ -98,6 +98,8 @@ public class HookStateTest {
         HookState.installed(f, "home_ad_float");
         HookState.installed(f, "pb_ad_float");
         assertEquals("每个成功安装标签都算一个锚点", 2, HookState.installedCount(f));
+        HookState.installed(f, "home_ad_float");
+        assertEquals("同一挂载点重复安装不重复计数", 2, HookState.installedCount(f));
     }
 
     @Test
@@ -187,5 +189,32 @@ public class HookStateTest {
                     previous.compareTo(feature.code) <= 0);
             previous = feature.code;
         }
+    }
+
+    /**
+     * core 原因列表：critical 原因后仍可记录可选 skip（skipReason 取最后一条），
+     * 但回传摘要必须保留首个 critical，避免失败横幅原因被后来的可选 skip 顶掉。
+     */
+    @Test
+    public void skipSummaryKeepsFirstCriticalAndLatestOptionalReason() {
+        Feature f = FeatureRegistry.byKey("one_key_sign");
+        HookState.markNotFoundCritical(f, "无可用锚点");
+        HookState.markNotFound(f, "部分锚点缺失");
+
+        assertEquals("最后一条原因供诊断页展示", "部分锚点缺失", HookState.skipReason(f));
+        assertEquals("回传摘要必须同时保留 critical 与最新原因",
+                "无可用锚点 | 部分锚点缺失", HookState.skipSummary(f));
+        assertTrue("后续可选 skip 不能清掉 critical 标记", HookState.hasCriticalSkip(f));
+    }
+
+    /** 没有 critical 时摘要就是最后一条原因（与旧 skipReason 行为一致）。 */
+    @Test
+    public void skipSummaryFallsBackToLatestOptionalReason() {
+        Feature f = FeatureRegistry.byKey("live_card_filter");
+        HookState.markNotFound(f, "first");
+        HookState.markNotFound(f, "second");
+
+        assertEquals("second", HookState.skipSummary(f));
+        assertFalse(HookState.hasCriticalSkip(f));
     }
 }

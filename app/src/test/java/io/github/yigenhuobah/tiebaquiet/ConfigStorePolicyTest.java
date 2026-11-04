@@ -5,6 +5,8 @@ import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
+import io.github.yigenhuobah.core.ConfigPolicy;
+
 /**
  * ConfigStore 的纯决策逻辑：remote 可用性、legacy 独立兜底、commit 结果与 store 复用。
  *
@@ -64,5 +66,30 @@ public class ConfigStorePolicyTest {
                 ConfigStorePolicy.reuseStore(false, service, service));
         assertFalse("store 与 service 都为空时仍需创建",
                 ConfigStorePolicy.reuseStore(false, null, null));
+    }
+
+    /**
+     * 迁移守卫：模块 facade 的每个布尔组合都必须与 core {@link ConfigPolicy}
+     * 完全一致；若有人以后在模块里另写一套判定，本用例立刻失败。
+     */
+    @Test
+    public void facadeMatchesCoreDecisionTable() {
+        Object service = new Object();
+        Object other = new Object();
+        for (int mask = 0; mask < 8; mask++) {
+            boolean a = (mask & 1) != 0;
+            boolean b = (mask & 2) != 0;
+            boolean c = (mask & 4) != 0;
+            assertTrue("canWrite(" + a + "," + b + ")",
+                    ConfigPolicy.canWrite(a, b) == ConfigStorePolicy.canWrite(a, b));
+            assertTrue("committed(" + a + "," + b + "," + c + ")",
+                    ConfigPolicy.committed(a, b, c) == ConfigStorePolicy.committed(a, b, c));
+        }
+        assertTrue(ConfigPolicy.reuseStore(true, service, service)
+                == ConfigStorePolicy.reuseStore(true, service, service));
+        assertTrue(ConfigPolicy.reuseStore(true, service, other)
+                == ConfigStorePolicy.reuseStore(true, service, other));
+        assertTrue(ConfigPolicy.reuseStore(false, service, service)
+                == ConfigStorePolicy.reuseStore(false, service, service));
     }
 }

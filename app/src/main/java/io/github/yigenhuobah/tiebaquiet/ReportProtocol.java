@@ -1,76 +1,73 @@
 package io.github.yigenhuobah.tiebaquiet;
 
-import java.util.Collections;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
+import io.github.yigenhuobah.core.ReportProtocolCore;
+
 /**
- * 诊断回传通道的纯 Java 协议逻辑：键白名单、取值长度、命中/错误计数合并、
- * 会话/新鲜度判定与失败语义。
+ * 诊断回传通道的模块适配器。
  *
- * <p>不依赖任何 android.*，可直接在 JVM 单测（见 ReportProtocolTest）；
- * StatusProvider 只做 Binder / SharedPreferences 胶水，校验规则集中在这里。
+ * <p>键白名单、取值长度、计数/文本合并、失败语义与新鲜度全部由 core 的
+ * {@link ReportProtocolCore} 承担；本类只做两件事：
+ * <ul>
+ *   <li>在类初始化时用本模块 25 个 {@link Feature} 的稳定 key 配置 core，
+ *       崩溃摘要使用既有 {@code crash0/1/2} 平铺键布局；</li>
+ *   <li>保留模块既有的常量与静态方法名，供 StatusProvider / hooks.Report /
+ *       诊断页无改动调用。</li>
+ * </ul>
+ *
+ * <p>会话身份比较（{@link #isNewSession}）是模块侧协议，core 没有对应方法；
+ * 按“core 缺方法只在模块内加适配 helper”的约束保留在这里。
  */
 public final class ReportProtocol {
 
-    public static final String PREFIX_REG = "reg.";
-    public static final String PREFIX_HIT = "hit.";
+    public static final String PREFIX_REG = ReportProtocolCore.PREFIX_REG;
+    public static final String PREFIX_HIT = ReportProtocolCore.PREFIX_HIT;
     /** hook 体异常计数（不含宿主 chain.proceed 异常）：err&gt;0 时该功能计入失败横幅。 */
-    public static final String PREFIX_ERR = "err.";
-    public static final String PREFIX_SKIP = "skip.";
+    public static final String PREFIX_ERR = ReportProtocolCore.PREFIX_ERR;
+    public static final String PREFIX_SKIP = ReportProtocolCore.PREFIX_SKIP;
     /** 主锚点缺失标记：crit=1 时该功能计入失败横幅。 */
-    public static final String PREFIX_CRIT = "crit.";
+    public static final String PREFIX_CRIT = ReportProtocolCore.PREFIX_CRIT;
 
     /** 回传快照的元数据：目标进程会话标识与落盘时间。 */
-    public static final String KEY_META_SESSION = "meta.session";
-    public static final String KEY_META_UPDATED_AT = "meta.updated_at";
+    public static final String KEY_META_SESSION = ReportProtocolCore.KEY_META_SESSION;
+    public static final String KEY_META_UPDATED_AT = ReportProtocolCore.KEY_META_UPDATED_AT;
 
     /** 最近崩溃回传键（crash0 最新，crash2 最旧）：键值通道的固定键名。 */
-    public static final String KEY_CRASH_0 = "crash0";
-    public static final String KEY_CRASH_1 = "crash1";
-    public static final String KEY_CRASH_2 = "crash2";
+    public static final String KEY_CRASH_0 = ReportProtocolCore.KEY_CRASH_0;
+    public static final String KEY_CRASH_1 = ReportProtocolCore.KEY_CRASH_1;
+    public static final String KEY_CRASH_2 = ReportProtocolCore.KEY_CRASH_2;
 
-    public static final int MAX_KEY = 128;
-    public static final int MAX_VALUE = 256;
+    public static final int MAX_KEY = ReportProtocolCore.MAX_KEY;
+    public static final int MAX_VALUE = ReportProtocolCore.MAX_VALUE;
 
     /** 超过 10 分钟没有新回传就视为过期，失败计数按“未知”处理（0）。 */
-    public static final long DEFAULT_TTL_MS = 10 * 60 * 1000L;
+    public static final long DEFAULT_TTL_MS = ReportProtocolCore.DEFAULT_TTL_MS;
 
     /** 未来时间戳容忍上限：updatedAt 领先 now 超过该值视为时钟回拨/异常，直接判过期。 */
-    public static final long MAX_FUTURE_SKEW_MS = 5 * 60 * 1000L;
+    public static final long MAX_FUTURE_SKEW_MS = ReportProtocolCore.MAX_FUTURE_SKEW_MS;
 
-    /** 25 个 Feature × 5 个前缀 + 2 个 meta 键 + 3 个 crash 键，构建后不可变。 */
-    private static final Set<String> ALLOWED_KEYS = buildAllowedKeys();
+    static {
+        // 进程级单次配置：feature key × 5 个前缀 + meta + crash0/1/2。
+        Set<String> featureKeys = new LinkedHashSet<>();
+        for (Feature feature : FeatureRegistry.all()) {
+            featureKeys.add(feature.key);
+        }
+        ReportProtocolCore.configure(featureKeys, ReportProtocolCore.CrashLayout.FLAT_KEYS);
+    }
 
     private ReportProtocol() {
     }
 
-    private static Set<String> buildAllowedKeys() {
-        Set<String> keys = new HashSet<>();
-        for (Feature feature : FeatureRegistry.all()) {
-            keys.add(PREFIX_REG + feature.key);
-            keys.add(PREFIX_HIT + feature.key);
-            keys.add(PREFIX_ERR + feature.key);
-            keys.add(PREFIX_SKIP + feature.key);
-            keys.add(PREFIX_CRIT + feature.key);
-        }
-        keys.add(KEY_META_SESSION);
-        keys.add(KEY_META_UPDATED_AT);
-        keys.add(KEY_CRASH_0);
-        keys.add(KEY_CRASH_1);
-        keys.add(KEY_CRASH_2);
-        return Collections.unmodifiableSet(keys);
-    }
-
     /** 只接受白名单键；非空、长度上限一并校验，其他一律拒绝。 */
     public static boolean validKey(String key) {
-        return key != null && !key.isEmpty() && key.length() <= MAX_KEY
-                && ALLOWED_KEYS.contains(key);
+        return ReportProtocolCore.validKey(key);
     }
 
     /** 值只校验非 null 与长度上限；hit 的可解析性由调用方再校验。 */
     public static boolean isValidValue(String value) {
-        return value != null && value.length() <= MAX_VALUE;
+        return ReportProtocolCore.isValidValue(value);
     }
 
     /**
@@ -78,9 +75,7 @@ public final class ReportProtocol {
      * 也避免较大计数被较小值覆盖。负数（异常输入）按 0 处理。
      */
     public static long mergeHit(long previous, long next) {
-        long p = previous < 0 ? 0 : previous;
-        long n = next < 0 ? 0 : next;
-        return Math.max(p, n);
+        return ReportProtocolCore.mergeHit(previous, next);
     }
 
     /**
@@ -90,13 +85,7 @@ public final class ReportProtocol {
      * 才能清掉上一次会话落盘的旧 skip；缺失不发送会让失败横幅永久误报。
      */
     public static String mergeText(String previous, String next) {
-        return next;
-    }
-
-    /** 已启用功能是否有回传（reg/skip 非空、critical 标记、hit 或 err &gt; 0）。 */
-    private static boolean reported(String reg, String skip, boolean criticalSkip,
-                                    long hit, long errors) {
-        return !isEmpty(reg) || !isEmpty(skip) || criticalSkip || hit > 0L || errors > 0L;
+        return ReportProtocolCore.mergeText(previous, next);
     }
 
     /**
@@ -108,21 +97,18 @@ public final class ReportProtocol {
      * 但 hook 体反复抛异常说明功能实际不可用，必须计入失败横幅。
      */
     public static boolean featureFailed(String reg, String skip, boolean criticalSkip, long hit) {
-        return featureFailed(reg, skip, criticalSkip, hit, 0L);
+        return ReportProtocolCore.featureFailed(reg, skip, criticalSkip, hit);
     }
 
     /** 带 hook 体错误计数的失败判定（见 {@link #PREFIX_ERR}）。 */
     public static boolean featureFailed(String reg, String skip, boolean criticalSkip,
                                         long hit, long errors) {
-        if (!reported(reg, skip, criticalSkip, hit, errors)) {
-            return false;
-        }
-        return isEmpty(reg) || criticalSkip || errors > 0L;
+        return ReportProtocolCore.featureFailed(reg, skip, criticalSkip, hit, errors);
     }
 
     /** crit 值固定为 "1"；其余（空串/缺失/旧数据）都按可选处理。 */
     public static boolean isCritical(String value) {
-        return "1".equals(value);
+        return ReportProtocolCore.isCritical(value);
     }
 
     /**
@@ -132,13 +118,7 @@ public final class ReportProtocol {
      * 而被长期当作新鲜数据；小幅偏差仍按新鲜处理，正常 TTL 逻辑保留。
      */
     public static boolean isFresh(long updatedAt, long now, long ttlMs) {
-        if (updatedAt <= 0L || ttlMs <= 0L) {
-            return false;
-        }
-        if (now - updatedAt < -MAX_FUTURE_SKEW_MS) {
-            return false;
-        }
-        return now - updatedAt <= ttlMs;
+        return ReportProtocolCore.isFresh(updatedAt, now, ttlMs);
     }
 
     /**
@@ -149,15 +129,14 @@ public final class ReportProtocol {
      * <p>旧版目标进程没有 session 字段（incoming 为空）：无从比较，按同会话兼容
      * 合并进当前数据，保证模块 App 与目标进程可各自升级；首个带 session 的
      * 回传仍会重置旧数据。
+     *
+     * <p><b>core 缺口</b>：{@link ReportProtocolCore} 没有会话身份比较方法，
+     * 按约束不改 core，保留在模块内。
      */
     public static boolean isNewSession(String storedSession, String incomingSession) {
         if (incomingSession == null || incomingSession.isEmpty()) {
             return false;
         }
         return !incomingSession.equals(storedSession);
-    }
-
-    private static boolean isEmpty(String value) {
-        return value == null || value.isEmpty();
     }
 }

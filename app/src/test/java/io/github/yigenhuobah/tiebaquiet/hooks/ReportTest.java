@@ -402,4 +402,39 @@ public class ReportTest {
         assertTrue(Report.shouldSend(snapshot, snapshot,
                 sentAt + Report.HEARTBEAT_MS, sentAt));
     }
+
+    /**
+     * 回传 skip 沿用旧协议：只发最后一条原因，不合并 critical 摘要。critical 原因
+     * 之后又记录可选 skip 时，skip 键必须是最后一条；{@link HookState#skipSummary}
+     * 仅用于诊断页展示，不得影响回传。
+     */
+    @Test
+    public void snapshotSkipSendsLatestReasonOnly() {
+        Feature f = feature("keep_alive_block");
+        HookState.markNotFoundCritical(f, "无可用锚点");
+        HookState.markNotFound(f, "可选锚点缺失");
+
+        Map<String, String> snap = Report.snapshot();
+
+        assertEquals("回传只发最后一条 skip 原因",
+                "可选锚点缺失", snap.get(ReportProtocol.PREFIX_SKIP + f.key));
+        assertEquals("诊断摘要仍保留 critical 原因",
+                "无可用锚点 | 可选锚点缺失", HookState.skipSummary(f));
+        assertEquals("1", snap.get(ReportProtocol.PREFIX_CRIT + f.key));
+    }
+
+    /**
+     * ALL-CRASH-01：崩溃路径的同步 flush 在没有 provider（JVM 无 Android
+     * Context）时必须 fail-safe 返回，不抛异常；刚记录的崩溃仍留在快照里。
+     */
+    @Test
+    public void flushNowIsFailSafeWithoutProvider() {
+        Report.recordCrash(new Thread("tb-flush-now"), new RuntimeException("flush-now"));
+
+        Report.flushNow();
+
+        assertTrue("flushNow 失败不得丢崩溃记录",
+                Report.snapshot().get(ReportProtocol.KEY_CRASH_0)
+                        .contains("|tb-flush-now|"));
+    }
 }

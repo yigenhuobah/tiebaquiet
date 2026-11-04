@@ -16,12 +16,35 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import io.github.yigenhuobah.core.ReportProtocolCore;
+
 /**
  * 诊断回传通道的纯 Java 协议规则：键白名单、值长度、hit 最大值合并、
  * critical skip 判定、会话新旧比较与 TTL 新鲜度。
  * 这些规则决定跨进程写入 prefs 的边界，改动必须同步更新本测试。
  */
 public class ReportProtocolTest {
+
+    /**
+     * 类初始化必须把本模块 Feature key 与 FLAT_KEYS 布局配置进 core：
+     * 白名单与模块 facade 完全一致，崩溃摘要仍走 crash0/1/2 平铺键
+     * （而不是 ROOT_ARRAY 的 "crashes" 容器键）。
+     */
+    @Test
+    public void coreIsConfiguredWithFeatureKeysAndFlatCrashLayout() {
+        // 先走一次 facade，确保 ReportProtocol 的静态初始化已执行 configure（常量
+        // 会被编译器内联，单看常量引用不能保证类初始化）。
+        assertTrue(ReportProtocol.validKey(ReportProtocol.PREFIX_REG + "splash_no_ad"));
+        for (Feature f : FeatureRegistry.all()) {
+            assertTrue("core 必须放行 err.<feature>",
+                    ReportProtocolCore.validKey(ReportProtocol.PREFIX_ERR + f.key));
+        }
+        assertEquals("crash0", ReportProtocolCore.crashKey(0));
+        assertEquals("crash1", ReportProtocolCore.crashKey(1));
+        assertEquals("crash2", ReportProtocolCore.crashKey(2));
+        assertNull("平铺布局没有第 4 个槽位", ReportProtocolCore.crashKey(3));
+        assertFalse("ROOT_ARRAY 容器键不得出现", ReportProtocolCore.validKey("crashes"));
+    }
 
     @Test
     public void validKeyAcceptsRepresentativePrefixes() {

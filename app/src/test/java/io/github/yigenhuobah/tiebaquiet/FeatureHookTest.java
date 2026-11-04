@@ -27,9 +27,13 @@ public class FeatureHookTest {
 
     private static final String LABEL = "test_hook";
 
+    /** 每个用例使用独立 key：HookState 按 Feature.key 分区，共享 key 会互相污染计数。 */
+    private static final java.util.concurrent.atomic.AtomicInteger FEATURE_SEQ =
+            new java.util.concurrent.atomic.AtomicInteger();
+
     private static Feature feature() {
-        return new Feature("AD-01", "test_hook_error_count", 0, 0, true,
-                Feature.Group.AD, env -> true);
+        return new Feature("AD-01", "test_hook_error_count_" + FEATURE_SEQ.incrementAndGet(),
+                0, 0, true, Feature.Group.AD, env -> true);
     }
 
     /**
