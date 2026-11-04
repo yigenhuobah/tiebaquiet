@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 挂载点体检：校验 anchors.json 的完整性与版本元数据，并在条件允许时用 DexSQL
-# 对目标 APK 逐项核对 57 个方法锚点 + 7 个类锚点。
+# 对目标 APK 逐项核对方法/字段锚点与类锚点。
 #
 # 用法:
 #   bash tools/check-mounts.sh [--apk <path>] [--anchors <path>] [--dexsql <path>]
@@ -87,8 +87,7 @@ sys.path.insert(0, str(TOOLS_DIR))
 
 import gen_anchors as ga
 
-EXPECTED_METHODS = 57
-EXPECTED_CLASSES = 7
+SCHEMA_VERSION = 1
 TARGET_PACKAGE = "com.baidu.tieba"
 
 errors = []
@@ -143,10 +142,13 @@ if not isinstance(payload, dict):
 
 app_version = payload.get("appVersion")
 version_code = payload.get("versionCode")
+schema_version = payload.get("schemaVersion")
 generated_by = payload.get("generatedBy")
 anchors = payload.get("anchors")
 classes = payload.get("classes")
 
+if isinstance(schema_version, bool) or schema_version != SCHEMA_VERSION:
+    fail("schemaVersion 缺失或不是 %d：%r" % (SCHEMA_VERSION, schema_version))
 if not isinstance(app_version, str) or not app_version.strip():
     fail("appVersion 缺失或不是非空字符串")
 if isinstance(version_code, bool) or not isinstance(version_code, int) or version_code <= 0:
@@ -160,44 +162,33 @@ if not isinstance(classes, dict):
     fail("classes 缺失或不是对象")
     classes = {}
 
-if len(anchors) != EXPECTED_METHODS:
-    fail("方法锚点数量 %d，预期 %d" % (len(anchors), EXPECTED_METHODS))
-if len(classes) != EXPECTED_CLASSES:
-    fail("类锚点数量 %d，预期 %d" % (len(classes), EXPECTED_CLASSES))
+overlap = sorted(set(anchors) & set(classes))
+if overlap:
+    fail("anchors 与 classes 存在同名 key：%s" % ", ".join(overlap))
 
 for key, entry in sorted(anchors.items()):
     if not isinstance(key, str) or not key:
-        fail("方法锚点 key 非法：%r" % (key,))
+        fail("锚点 key 非法：%r" % (key,))
         continue
     if not isinstance(entry, dict):
-        fail("方法锚点 %s 不是对象" % key)
+        fail("锚点 %s 不是对象" % key)
         continue
-    for field in ("c", "m", "s"):
+    for field in ("c", "m", "s", "feature", "note"):
         value = entry.get(field)
         if not isinstance(value, str) or not value:
-            fail("方法锚点 %s 缺少必填字段 %s" % (key, field))
+            fail("锚点 %s 缺少必填字段 %s" % (key, field))
+    if not isinstance(entry.get("critical"), bool):
+        fail("锚点 %s 的 critical 不是布尔值" % key)
+    feature = entry.get("feature")
+    if isinstance(feature, str) and feature \
+            and not feature.startswith(("AD-", "UI-", "PV-", "EN-", "EX-")):
+        fail("锚点 %s 的 feature 不是统一功能编号：%r" % (key, feature))
 
 for key, cls in sorted(classes.items()):
     if not isinstance(key, str) or not key:
         fail("类锚点 key 非法：%r" % (key,))
     if not isinstance(cls, str) or not cls:
         fail("类锚点 %s 不是非空字符串" % key)
-
-# gen_anchors.py 的清单是唯一事实来源；anchors.json 必须与它逐键一致。
-expected_methods = set(ga.ANCHORS)
-expected_classes = set(ga.CLASSES)
-missing_methods = sorted(expected_methods - set(anchors))
-extra_methods = sorted(set(anchors) - expected_methods)
-missing_classes = sorted(expected_classes - set(classes))
-extra_classes = sorted(set(classes) - expected_classes)
-if missing_methods:
-    fail("anchors.json 缺少 gen_anchors.py 中的方法锚点：%s" % ", ".join(missing_methods))
-if extra_methods:
-    fail("anchors.json 含 gen_anchors.py 中不存在的方法锚点：%s" % ", ".join(extra_methods))
-if missing_classes:
-    fail("anchors.json 缺少 gen_anchors.py 中的类锚点：%s" % ", ".join(missing_classes))
-if extra_classes:
-    fail("anchors.json 含 gen_anchors.py 中不存在的类锚点：%s" % ", ".join(extra_classes))
 
 # 版本元数据与 README 首屏目标版本保持一致。
 try:
@@ -218,10 +209,10 @@ if match:
 else:
     warn("未能从 README.md 解析目标版本，跳过版本元数据对照")
 
-out("==> 锚点表：%d methods + %d classes（appVersion %s / versionCode %s）"
-    % (len(anchors), len(classes), app_version, version_code))
+out("==> 锚点表：%d anchors + %d classes（schema v%d，appVersion %s / versionCode %s）"
+    % (len(anchors), len(classes), schema_version, app_version, version_code))
 if not errors:
-    out("==> 锚点表完整性 OK（数量、必填字段、版本元数据、与 gen_anchors.py 清单一致）")
+    out("==> 锚点表完整性 OK（schema、必填字段、feature/critical、版本元数据）")
 
 # ------------------------------------------------------------ APK / DexSQL
 apk_arg = os.environ.get("CHECK_MOUNTS_APK", "").strip()
@@ -322,8 +313,8 @@ if dexsql is None or apk is None:
     if errors:
         out("==> 结果：FAIL（%d 项）" % len(errors))
         raise SystemExit(1)
-    out("==> 结果：锚点表 OK（降级模式）；方法 %d/%d，类 %d/%d"
-        % (len(anchors), EXPECTED_METHODS, len(classes), EXPECTED_CLASSES))
+    out("==> 结果：锚点表 OK（降级模式）；anchors %d，classes %d"
+        % (len(anchors), len(classes)))
     raise SystemExit(0)
 
 out("==> dexsql: %s" % dexsql)
@@ -341,21 +332,33 @@ def query_count(sql):
 
 
 method_ok = method_sig = method_gone = 0
+field_ok = field_sig = field_gone = 0
 class_ok = class_gone = 0
 
 for key, entry in sorted(anchors.items()):
-    descriptor = "L%s;->%s%s" % (
-        entry["c"].replace(".", "/"), entry["m"], entry["s"],
-    )
+    is_method = entry["s"].startswith("(")
+    table = "methods" if is_method else "fields"
+    if is_method:
+        descriptor = "L%s;->%s%s" % (
+            entry["c"].replace(".", "/"), entry["m"], entry["s"],
+        )
+    else:
+        descriptor = "L%s;->%s:%s" % (
+            entry["c"].replace(".", "/"), entry["m"], entry["s"],
+        )
     try:
         count = query_count(
-            "SELECT count(*) AS c FROM methods WHERE descriptor='%s'" % descriptor
+            "SELECT count(*) AS c FROM %s WHERE descriptor='%s'" % (table, descriptor)
         )
     except RuntimeError as exc:
-        fail("dexsql 查询方法 %s 失败：%s" % (key, exc))
+        fail("dexsql 查询%s %s 失败：%s"
+             % ("方法" if is_method else "字段", key, exc))
         continue
     if count > 0:
-        method_ok += 1
+        if is_method:
+            method_ok += 1
+        else:
+            field_ok += 1
         continue
     try:
         class_count = query_count(
@@ -365,10 +368,16 @@ for key, entry in sorted(anchors.items()):
         fail("dexsql 查询类 %s 失败：%s" % (entry["c"], exc))
         continue
     if class_count > 0:
-        method_sig += 1
+        if is_method:
+            method_sig += 1
+        else:
+            field_sig += 1
         print("SIG %s: %s" % (key, descriptor))
     else:
-        method_gone += 1
+        if is_method:
+            method_gone += 1
+        else:
+            field_gone += 1
         print("GONE %s: %s" % (key, descriptor))
 
 for key, cls in sorted(classes.items()):
@@ -387,12 +396,16 @@ for key, cls in sorted(classes.items()):
 
 if method_sig or method_gone:
     fail("方法锚点未全命中：SIG %d / GONE %d" % (method_sig, method_gone))
+if field_sig or field_gone:
+    fail("字段锚点未全命中：SIG %d / GONE %d" % (field_sig, field_gone))
 if class_gone:
     fail("类锚点未全命中：GONE %d" % class_gone)
 
-out("==> 结果：methods OK %d/%d（SIG %d / GONE %d）；classes OK %d/%d（GONE %d）"
-    % (method_ok, EXPECTED_METHODS, method_sig, method_gone,
-       class_ok, EXPECTED_CLASSES, class_gone))
+out("==> 结果：methods OK %d/%d（SIG %d / GONE %d）；"
+    "fields OK %d/%d（SIG %d / GONE %d）；classes OK %d/%d（GONE %d）"
+    % (method_ok, method_ok + method_sig + method_gone, method_sig, method_gone,
+       field_ok, field_ok + field_sig + field_gone, field_sig, field_gone,
+       class_ok, class_ok + class_gone, class_gone))
 if errors:
     out("==> 结果：FAIL（%d 项）" % len(errors))
     raise SystemExit(1)

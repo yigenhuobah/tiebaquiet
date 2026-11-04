@@ -10,6 +10,7 @@ import static org.junit.Assert.fail;
 
 import org.junit.Test;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 /**
@@ -17,6 +18,12 @@ import java.lang.reflect.Method;
  * 解析错误会让所有功能静默跳过，因此这里覆盖原始类型、对象、数组与非法输入。
  */
 public class AnchorTableTest {
+
+    /** 字段锚点测试夹具：字段名/类型与 anchors.json 的 s 描述符对应。 */
+    static final class FieldFixture {
+        String name;
+        int count;
+    }
 
     private static ClassLoader loader() {
         return AnchorTable.class.getClassLoader();
@@ -186,6 +193,45 @@ public class AnchorTableTest {
                 "home_fragment", "not.real.Missing");
         assertNull(missing.value);
         assertEquals(AnchorTable.Failure.CLASS_NOT_FOUND, missing.failure);
+    }
+
+    @Test
+    public void parseTypeHandlesPrimitiveObjectAndArray() {
+        assertEquals(String.class, AnchorTable.parseType("Ljava/lang/String;", loader()));
+        assertEquals(int.class, AnchorTable.parseType("I", loader()));
+        assertEquals(String[][].class,
+                AnchorTable.parseType("[[Ljava/lang/String;", loader()));
+        try {
+            AnchorTable.parseType("()V", loader());
+            fail("方法描述符不能当作字段类型");
+        } catch (IllegalArgumentException expected) {
+            // 预期
+        }
+    }
+
+    /** 字段锚点：沿继承链查找，缺失/类型不符分别归类。 */
+    @Test
+    public void resolveFieldReportsSuccessAndFailures() {
+        String fixture = FieldFixture.class.getName();
+        AnchorTable.Lookup<Field> ok = AnchorTable.resolveField(loader(),
+                "home_tab_item_b", fixture, "name", "Ljava/lang/String;");
+        assertNotNull("真实字段必须解析成功", ok.value);
+        assertNull(ok.failure);
+
+        AnchorTable.Lookup<Field> missing = AnchorTable.resolveField(loader(),
+                "home_tab_item_b", fixture, "noSuchFieldForTiebaQuietTest", "I");
+        assertNull(missing.value);
+        assertEquals(AnchorTable.Failure.FIELD_NOT_FOUND, missing.failure);
+
+        AnchorTable.Lookup<Field> wrongType = AnchorTable.resolveField(loader(),
+                "home_tab_item_b", fixture, "count", "Ljava/lang/String;");
+        assertNull(wrongType.value);
+        assertEquals(AnchorTable.Failure.FIELD_TYPE_MISMATCH, wrongType.failure);
+
+        AnchorTable.Lookup<Field> badType = AnchorTable.resolveField(loader(),
+                "home_tab_item_b", fixture, "name", "()V");
+        assertNull(badType.value);
+        assertEquals(AnchorTable.Failure.SIGNATURE_MISMATCH, badType.failure);
     }
 
     /** WARN 文案必须带锚点 key 与异常类型，便于 logcat 定位是哪个锚点坏了。 */

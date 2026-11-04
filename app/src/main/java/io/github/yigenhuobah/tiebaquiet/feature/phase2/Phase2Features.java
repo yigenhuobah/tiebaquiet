@@ -12,6 +12,7 @@ import java.lang.reflect.Method;
 import java.util.List;
 
 import io.github.libxposed.api.XposedInterface;
+import io.github.yigenhuobah.tiebaquiet.anchor.AnchorKeys;
 import io.github.yigenhuobah.tiebaquiet.Feature;
 import io.github.yigenhuobah.tiebaquiet.FeatureRegistry;
 import io.github.yigenhuobah.tiebaquiet.HookEnv;
@@ -59,23 +60,23 @@ public final class Phase2Features {
         Feature f = FeatureRegistry.byKey("ad_request_block");
         boolean any = false;
 
-        if (f.replace(env, env.anchors.method("pid_loader_load"),
+        if (f.replace(env, env.anchors.method(AnchorKeys.PID_LOADER_LOAD),
                 "pid_loader_load", Boolean.FALSE)) {
             any = true;
         }
 
         // 信息流广告插入闸门：请求被拦后仍可能有缓存物料，这里再断一次插入。
-        if (f.replace(env, env.anchors.method("ad_insert_gate"),
+        if (f.replace(env, env.anchors.method(AnchorKeys.AD_INSERT_GATE),
                 "ad_insert_gate", Boolean.FALSE)) {
             any = true;
         }
         // 推广 App 卡单卡展示闸门。
-        if (f.replace(env, env.anchors.method("ad_card_gate"),
+        if (f.replace(env, env.anchors.method(AnchorKeys.AD_CARD_GATE),
                 "ad_card_gate", Boolean.FALSE)) {
             any = true;
         }
 
-        Method nad = env.anchors.method("nad_requester_a");
+        Method nad = env.anchors.method(AnchorKeys.NAD_REQUESTER_A);
         if (nad != null) {
             boolean installed = f.hook(env, nad, "nad_requester_a",
                     new XposedInterface.Hooker() {
@@ -84,13 +85,16 @@ public final class Phase2Features {
                             List<Object> args = chain.getArgs();
                             Object callback = args.size() > 1 ? args.get(1) : null;
                             try {
-                                Class<?> errorClass = env.loader.loadClass(
-                                        "com.baidu.nadcore.requester.NadRequester$Error");
+                                Class<?> errorClass = env.anchors.clazz(AnchorKeys.NAD_ERROR);
+                                Class<?> callbackClass = env.anchors.clazz(AnchorKeys.NAD_CALLBACK);
+                                Method onError = env.anchors.method(AnchorKeys.NAD_CALLBACK_A);
+                                if (errorClass == null || callbackClass == null || onError == null
+                                        || !callbackClass.isInstance(callback)) {
+                                    return null;
+                                }
                                 Object error = errorClass.getConstructor(String.class)
                                         .newInstance("Blocked by client");
-                                Class<?> iface = env.loader.loadClass(
-                                        "com.baidu.nadcore.requester.NadRequester$b");
-                                iface.getMethod("a", errorClass).invoke(callback, error);
+                                onError.invoke(callback, error);
                             } catch (Throwable ignored) {
                                 // 回调失败也不影响：请求已不发出。
                             }
@@ -100,7 +104,7 @@ public final class Phase2Features {
             any = any || installed;
         }
 
-        Method qy8 = env.anchors.method("qy8_c");
+        Method qy8 = env.anchors.method(AnchorKeys.QY8_C);
         if (qy8 != null) {
             boolean installed = f.hook(env, qy8, "qy8_c",
                     new XposedInterface.Hooker() {
@@ -110,12 +114,12 @@ public final class Phase2Features {
                             Object request = args.size() > 0 ? args.get(0) : null;
                             Object callback = args.size() > 1 ? args.get(1) : null;
                             try {
-                                Class<?> requestClass = env.loader.loadClass(
-                                        "com.baidu.tieba.r18");
-                                Class<?> iface = env.loader.loadClass(
-                                        "com.baidu.tieba.x18");
-                                iface.getMethod("c", requestClass, int.class, String.class)
-                                        .invoke(callback, request, Integer.valueOf(0), "blocked");
+                                Class<?> requestClass = env.anchors.clazz(AnchorKeys.FEED_REQUEST);
+                                Method onError = env.anchors.method(AnchorKeys.FEED_CALLBACK_C);
+                                if (requestClass == null || onError == null) {
+                                    return null;
+                                }
+                                onError.invoke(callback, request, Integer.valueOf(0), "blocked");
                             } catch (Throwable ignored) {
                             }
                             return null;
@@ -130,7 +134,7 @@ public final class Phase2Features {
     /** 只看楼主：请求里强制 lz=1。 */
     public static boolean installHostOnly(HookEnv env) {
         final Feature f = FeatureRegistry.byKey("host_only");
-        Method method = env.anchors.method("add_lz");
+        Method method = env.anchors.method(AnchorKeys.ADD_LZ);
         return f.hook(env, method, "add_lz", new XposedInterface.Hooker() {
             @Override
             public Object intercept(XposedInterface.Chain chain) throws Throwable {
@@ -151,7 +155,7 @@ public final class Phase2Features {
     /** 楼层倒序：请求里强制 r=1。 */
     public static boolean installReverseOrder(HookEnv env) {
         final Feature f = FeatureRegistry.byKey("reverse_order");
-        Method method = env.anchors.method("add_r");
+        Method method = env.anchors.method(AnchorKeys.ADD_R);
         return f.hook(env, method, "add_r", new XposedInterface.Hooker() {
             @Override
             public Object intercept(XposedInterface.Chain chain) throws Throwable {
@@ -172,21 +176,21 @@ public final class Phase2Features {
     /** 图片去水印：强制水印类型为“不显示”（默认值 2）。 */
     public static boolean installNoWatermark(HookEnv env) {
         Feature f = FeatureRegistry.byKey("no_watermark");
-        return f.replace(env, env.anchors.method("watermark_type"),
+        return f.replace(env, env.anchors.method(AnchorKeys.WATERMARK_TYPE),
                 "watermark_type", Integer.valueOf(2));
     }
 
     /** 原图入口常显：强制“查看原图”按钮可用。 */
     public static boolean installOriginalImage(HookEnv env) {
         Feature f = FeatureRegistry.byKey("original_image");
-        return f.replace(env, env.anchors.method("original_button"),
+        return f.replace(env, env.anchors.method(AnchorKeys.ORIGINAL_BUTTON),
                 "original_button", Boolean.TRUE);
     }
 
     /** 视频直链复制：播放时把直链写入剪贴板。 */
     public static boolean installVideoLink(HookEnv env) {
         final Feature f = FeatureRegistry.byKey("video_link");
-        Method method = env.anchors.method("video_set_path");
+        Method method = env.anchors.method(AnchorKeys.VIDEO_SET_PATH);
         return f.hook(env, method, "video_set_path", new XposedInterface.Hooker() {
             @Override
             public Object intercept(XposedInterface.Chain chain) throws Throwable {

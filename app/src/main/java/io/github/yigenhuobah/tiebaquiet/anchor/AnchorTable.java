@@ -8,6 +8,7 @@ import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.reflect.Array;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -46,8 +47,10 @@ public final class AnchorTable {
         MISSING_KEY("missing key"),
         CLASS_NOT_FOUND("class not found"),
         METHOD_NOT_FOUND("method not found"),
+        FIELD_NOT_FOUND("field not found"),
         SIGNATURE_MISMATCH("signature mismatch"),
         RETURN_TYPE_MISMATCH("return type mismatch"),
+        FIELD_TYPE_MISMATCH("field type mismatch"),
         ERROR("resolve error");
 
         final String label;
@@ -76,6 +79,7 @@ public final class AnchorTable {
     private final ClassLoader loader;
     private final ConcurrentHashMap<String, Method> methodCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Class<?>> classCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Field> fieldCache = new ConcurrentHashMap<>();
     /** 已写过的 WARN 文案：同一失败只记一次，避免信息流逐条判定时刷屏。 */
     private final Set<String> warned = ConcurrentHashMap.newKeySet();
 
@@ -154,6 +158,40 @@ public final class AnchorTable {
     }
 
     /**
+     * 字段锚点：{@code s} 不以 "(" 开头时按字段类型描述符解析。
+     * 用于宿主混名前字段（字段名/类型都可能变），失败同样 fail-open 返回 null。
+     */
+    public Field field(String key) {
+        Field cached = fieldCache.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        try {
+            JSONObject anchors = root.optJSONObject("anchors");
+            if (anchors == null) {
+                warn(key, Failure.MISSING_KEY, "missing anchors section", null);
+                return null;
+            }
+            JSONObject entry = anchors.optJSONObject(key);
+            if (entry == null) {
+                warn(key, Failure.MISSING_KEY, "missing anchor entry", null);
+                return null;
+            }
+            Lookup<Field> lookup = resolveField(this, loader, key, entry.optString("c"),
+                    entry.optString("m"), entry.optString("s"));
+            if (lookup.value == null) {
+                return null;
+            }
+            lookup.value.setAccessible(true);
+            fieldCache.put(key, lookup.value);
+            return lookup.value;
+        } catch (Throwable t) {
+            warn(key, Failure.ERROR, "field anchor resolve error", t);
+            return null;
+        }
+    }
+
+    /**
      * 解析目标类：类不存在、类名为空与其它反射异常分别记录 WARN。
      * 静态方法便于 JVM 单测直接覆盖失败原因，不依赖 JSON。
      */
@@ -176,6 +214,66 @@ public final class AnchorTable {
             warn(owner, key, Failure.ERROR, className, t);
             return new Lookup<>(null, Failure.ERROR, t);
         }
+    }
+
+    /**
+     * 解析目标字段：沿类继承链查找，字段缺失与类型不符分别记录 WARN。
+     * 静态方法便于 JVM 单测直接覆盖失败原因，不依赖 JSON。
+     */
+    static Lookup<Field> resolveField(ClassLoader loader, String key, String className,
+                                      String fieldName, String type) {
+        return resolveField(null, loader, key, className, fieldName, type);
+    }
+
+    private static Lookup<Field> resolveField(AnchorTable owner, ClassLoader loader,
+                                              String key, String className,
+                                              String fieldName, String type) {
+        Lookup<Class<?>> classLookup = resolveClass(owner, loader, key, className);
+        if (classLookup.value == null) {
+            return new Lookup<>(null, classLookup.failure, classLookup.error);
+        }
+        if (fieldName == null || fieldName.isEmpty()) {
+            warn(owner, key, Failure.MISSING_KEY, "empty field name", null);
+            return new Lookup<>(null, Failure.MISSING_KEY, null);
+        }
+        Class<?> expected;
+        try {
+            expected = parseType(type, loader);
+        } catch (Throwable t) {
+            warn(owner, key, Failure.SIGNATURE_MISMATCH, type, t);
+            return new Lookup<>(null, Failure.SIGNATURE_MISMATCH, t);
+        }
+        Class<?> current = classLookup.value;
+        while (current != null) {
+            try {
+                Field field = current.getDeclaredField(fieldName);
+                if (field.getType() != expected) {
+                    warn(owner, key, Failure.FIELD_TYPE_MISMATCH,
+                            type + " expected " + expected.getName()
+                                    + " actual " + field.getType().getName(), null);
+                    return new Lookup<>(null, Failure.FIELD_TYPE_MISMATCH, null);
+                }
+                return new Lookup<>(field, null, null);
+            } catch (NoSuchFieldException e) {
+                current = current.getSuperclass();
+            } catch (Throwable t) {
+                warn(owner, key, Failure.ERROR, fieldName + ":" + type, t);
+                return new Lookup<>(null, Failure.ERROR, t);
+            }
+        }
+        warn(owner, key, Failure.FIELD_NOT_FOUND, fieldName + ":" + type, null);
+        return new Lookup<>(null, Failure.FIELD_NOT_FOUND, null);
+    }
+
+    /**
+     * 解析单个 JVM 类型描述符，如 "Ljava/lang/String;" → String.class、"[[I" → int[][].class。
+     * 字段锚点的 {@code s} 使用该格式（方法锚点的 {@code s} 以 "(" 开头）。
+     */
+    public static Class<?> parseType(String descriptor, ClassLoader loader) {
+        if (descriptor == null || descriptor.isEmpty() || descriptor.startsWith("(")) {
+            throw new IllegalArgumentException("bad type descriptor: " + descriptor);
+        }
+        return parseParameterTypes("(" + descriptor + ")V", loader)[0];
     }
 
     /**

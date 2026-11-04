@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import io.github.libxposed.api.XposedInterface;
+import io.github.yigenhuobah.tiebaquiet.anchor.AnchorKeys;
 import io.github.yigenhuobah.tiebaquiet.Feature;
 import io.github.yigenhuobah.tiebaquiet.FeatureRegistry;
 import io.github.yigenhuobah.tiebaquiet.HookEnv;
@@ -46,12 +47,14 @@ public final class Phase1Features {
             + "})();";
 
     private static final String[] TAB_RED_DOT_KEYS = {
-            "tab_add_tip", "tab_add_tip_2", "tab_add_tip_3", "tab_add_tip_4", "tab_add_tip_wrap",
-            "msg_red_dot_refresh", "msg_red_dot_refresh_opt", "msg_red_dot_refresh_str",
+            AnchorKeys.TAB_ADD_TIP, AnchorKeys.TAB_ADD_TIP_2, AnchorKeys.TAB_ADD_TIP_3,
+            AnchorKeys.TAB_ADD_TIP_4, AnchorKeys.TAB_ADD_TIP_WRAP,
+            AnchorKeys.MSG_RED_DOT_REFRESH, AnchorKeys.MSG_RED_DOT_REFRESH_OPT,
+            AnchorKeys.MSG_RED_DOT_REFRESH_STR,
     };
 
     private static final String[] LIVE_ITEM_KEYS = {
-            "live_item_16_set_data", "live_item_45_set_data",
+            AnchorKeys.LIVE_ITEM_16_SET_DATA, AnchorKeys.LIVE_ITEM_45_SET_DATA,
     };
 
     /** 个人页注入脚本的重试上限（约 0.8s + 14×0.7s ≈ 10.6s 后放弃）。 */
@@ -63,23 +66,23 @@ public final class Phase1Features {
     /** 开屏广告：走官方“会员无开屏”路径。 */
     public static boolean installSplashNoAd(HookEnv env) {
         Feature f = FeatureRegistry.byKey("splash_no_ad");
-        return f.replace(env, env.anchors.method("splash_forbid_b"),
+        return f.replace(env, env.anchors.method(AnchorKeys.SPLASH_FORBID_B),
                 "splash_forbid_b", Boolean.TRUE);
     }
 
     /** 营销/活动/签到弹窗总闸。 */
     public static boolean installYunDialog(HookEnv env) {
         Feature f = FeatureRegistry.byKey("yun_dialog");
-        return f.replace(env, env.anchors.method("yun_dialog_can_show"),
+        return f.replace(env, env.anchors.method(AnchorKeys.YUN_DIALOG_CAN_SHOW),
                 "yun_dialog_can_show", Boolean.FALSE);
     }
 
     /** 首页/帖子页悬浮广告。 */
     public static boolean installFloatAd(HookEnv env) {
         Feature f = FeatureRegistry.byKey("float_ad");
-        boolean home = f.replace(env, env.anchors.method("home_ad_float"),
+        boolean home = f.replace(env, env.anchors.method(AnchorKeys.HOME_AD_FLOAT),
                 "home_ad_float", null);
-        boolean postBar = f.replace(env, env.anchors.method("pb_ad_float"),
+        boolean postBar = f.replace(env, env.anchors.method(AnchorKeys.PB_AD_FLOAT),
                 "pb_ad_float", null);
         return home || postBar;
     }
@@ -87,7 +90,7 @@ public final class Phase1Features {
     /** 信息流广告/推广卡过滤（全列表统一入口）。 */
     public static boolean installFeedAdFilter(HookEnv env) {
         final Feature f = FeatureRegistry.byKey("feed_ad_filter");
-        Method method = env.anchors.method("template_set_list");
+        Method method = env.anchors.method(AnchorKeys.TEMPLATE_SET_LIST);
         return f.hook(env, method, "template_set_list", new XposedInterface.Hooker() {
             @Override
             public Object intercept(XposedInterface.Chain chain) throws Throwable {
@@ -119,26 +122,26 @@ public final class Phase1Features {
     /** 推荐吧卡。 */
     public static boolean installNoRecForum(HookEnv env) {
         Feature f = FeatureRegistry.byKey("rec_forum");
-        return f.replace(env, env.anchors.method("rec_forum_strategy_h"),
+        return f.replace(env, env.anchors.method(AnchorKeys.REC_FORUM_STRATEGY_H),
                 "rec_forum_strategy_h", Boolean.FALSE);
     }
 
     /** 更新弹窗。 */
     public static boolean installUpdateDialog(HookEnv env) {
         Feature f = FeatureRegistry.byKey("update_dialog");
-        return f.skip(env, env.anchors.method("upgrade_pop"), "upgrade_pop");
+        return f.skip(env, env.anchors.method(AnchorKeys.UPGRADE_POP), "upgrade_pop");
     }
 
     /** 彩蛋广告。 */
     public static boolean installEasterEgg(HookEnv env) {
         Feature f = FeatureRegistry.byKey("easter_egg");
-        return f.skip(env, env.anchors.method("easter_egg_o"), "easter_egg_o");
+        return f.skip(env, env.anchors.method(AnchorKeys.EASTER_EGG_O), "easter_egg_o");
     }
 
     /** 频道栏默认“关注”（口味项，默认关）。 */
     public static boolean installDefaultChannel(HookEnv env) {
         final Feature f = FeatureRegistry.byKey("default_channel");
-        Method method = env.anchors.method("new_scroll_r");
+        Method method = env.anchors.method(AnchorKeys.NEW_SCROLL_R);
         return f.hook(env, method, "new_scroll_r", new XposedInterface.Hooker() {
             @Override
             public Object intercept(XposedInterface.Chain chain) throws Throwable {
@@ -148,7 +151,7 @@ public final class Phase1Features {
                     List<?> list = (List<?>) raw;
                     List<Object> focus = new ArrayList<>();
                     for (Object item : list) {
-                        if (looksLikeFollowTab(item)) {
+                        if (looksLikeFollowTab(env, item)) {
                             focus.add(item);
                         }
                     }
@@ -178,7 +181,7 @@ public final class Phase1Features {
     /** 强制夜间（口味项，默认关）。 */
     public static boolean installForceNight(HookEnv env) {
         Feature f = FeatureRegistry.byKey("force_night");
-        Method method = env.anchors.method("skin_type");
+        Method method = env.anchors.method(AnchorKeys.SKIN_TYPE);
         return f.after(env, method, "skin_type", new Feature.Transformer() {
             @Override
             public Object apply(Object result) {
@@ -192,7 +195,7 @@ public final class Phase1Features {
         final Feature f = FeatureRegistry.byKey("live_card_filter");
         boolean any = false;
 
-        Method setList = env.anchors.method("template_set_list");
+        Method setList = env.anchors.method(AnchorKeys.TEMPLATE_SET_LIST);
         if (setList != null) {
             boolean installed = f.hook(env, setList, "template_set_list",
                     new XposedInterface.Hooker() {
@@ -218,7 +221,7 @@ public final class Phase1Features {
         }
 
         // 兜底：首页直播卡专用适配器，把条目高度压成 0。
-        Method fill = env.anchors.method("live_adapter_fill");
+        Method fill = env.anchors.method(AnchorKeys.LIVE_ADAPTER_FILL);
         if (fill != null) {
             boolean installed = f.after(env, fill, "live_adapter_fill",
                     new Feature.Transformer() {
@@ -234,7 +237,7 @@ public final class Phase1Features {
         }
 
         // “关注的主播在直播”卡片：绑定数据后直接隐藏并压成 0 高。
-        Method liveCard = env.anchors.method("ala_live_card_bind");
+        Method liveCard = env.anchors.method(AnchorKeys.ALA_LIVE_CARD_BIND);
         if (liveCard != null) {
             boolean installed = f.hook(env, liveCard, "ala_live_card_bind",
                     new XposedInterface.Hooker() {
@@ -252,7 +255,7 @@ public final class Phase1Features {
         }
 
         // 直播推荐卡（含内嵌直播列表）：创建后直接压成 0 高。
-        Method create = env.anchors.method("live_card_create");
+        Method create = env.anchors.method(AnchorKeys.LIVE_CARD_CREATE);
         if (create != null) {
             boolean installed = f.after(env, create, "live_card_create",
                     new Feature.Transformer() {
@@ -290,7 +293,7 @@ public final class Phase1Features {
     /** 实时热点卡过滤：信息流中的“实时热点”卡片。 */
     public static boolean installHotCardFilter(HookEnv env) {
         final Feature f = FeatureRegistry.byKey("hot_card_filter");
-        Method method = env.anchors.method("template_set_list");
+        Method method = env.anchors.method(AnchorKeys.TEMPLATE_SET_LIST);
         return f.hook(env, method, "template_set_list", new XposedInterface.Hooker() {
             @Override
             public Object intercept(XposedInterface.Chain chain) throws Throwable {
@@ -304,7 +307,7 @@ public final class Phase1Features {
     /** 底栏小卖部：强制走“发布入口迁移”形态，隐藏小卖部 Tab 并恢复底栏发布按钮。 */
     public static boolean installHideStoreTab(HookEnv env) {
         Feature f = FeatureRegistry.byKey("hide_store_tab");
-        Method method = env.anchors.method("retail_store_page");
+        Method method = env.anchors.method(AnchorKeys.RETAIL_STORE_PAGE);
         return f.replace(env, method, "retail_store_page", Boolean.FALSE);
     }
 
@@ -315,13 +318,13 @@ public final class Phase1Features {
         // tbwebview_inner）：由 gen_anchors 按目标 APK 校验，AnchorTable 再按
         // 签名解析并 setAccessible。改名/改可见性时这里得到 null，功能按锚点
         // 缺失显式跳过，不再 hook 后靠运行期硬编码反射名静默失效。
-        final Method getWeb = env.anchors.method("person_tab_web_k");
-        final Method getInner = env.anchors.method("tbwebview_inner");
+        final Method getWeb = env.anchors.method(AnchorKeys.PERSON_TAB_WEB_K);
+        final Method getInner = env.anchors.method(AnchorKeys.TBWEBVIEW_INNER);
         if (getWeb == null || getInner == null) {
             f.markSkip("锚点缺失 person_tab_web_k/tbwebview_inner");
             return false;
         }
-        Method method = env.anchors.method("person_tab_attach");
+        Method method = env.anchors.method(AnchorKeys.PERSON_TAB_ATTACH);
         return f.hook(env, method, "person_tab_attach", new XposedInterface.Hooker() {
             @Override
             public Object intercept(XposedInterface.Chain chain) throws Throwable {
@@ -386,7 +389,7 @@ public final class Phase1Features {
     /** 吧页推广卡过滤。 */
     public static boolean installForumPromoFilter(HookEnv env) {
         Feature f = FeatureRegistry.byKey("forum_promo_filter");
-        Method method = env.anchors.method("forum_res_parser_a");
+        Method method = env.anchors.method(AnchorKeys.FORUM_RES_PARSER_A);
         return f.after(env, method, "forum_res_parser_a", new Feature.Transformer() {
             @Override
             public Object apply(Object result) {
@@ -414,33 +417,34 @@ public final class Phase1Features {
         return "重试用尽仍未注入（person_tab_web_k/tbwebview_inner）";
     }
 
-    private static boolean looksLikeFollowTab(Object item) {
+    /**
+     * 频道 Tab 判定：字段名 b/c 已收编为字段锚点（home_tab_item_b/c），
+     * 由 AnchorTable 按目标类 + 字段类型解析；改名/改类型时按锚点缺失返回 false。
+     */
+    private static boolean looksLikeFollowTab(HookEnv env, Object item) {
         if (item == null) {
             return false;
         }
-        try {
-            Class<?> cls = item.getClass();
-            String b = readString(cls, item, "b");
-            String c = readString(cls, item, "c");
-            return (b != null && b.contains("关注")) || (c != null && c.contains("关注"));
-        } catch (Throwable t) {
+        Class<?> cls = env.anchors.clazz(AnchorKeys.HOME_TAB_ITEM);
+        if (cls == null || !cls.isInstance(item)) {
             return false;
         }
+        String b = readString(env, AnchorKeys.HOME_TAB_ITEM_B, item);
+        String c = readString(env, AnchorKeys.HOME_TAB_ITEM_C, item);
+        return (b != null && b.contains("关注")) || (c != null && c.contains("关注"));
     }
 
-    private static String readString(Class<?> cls, Object item, String name) {
-        Class<?> c = cls;
-        while (c != null) {
-            try {
-                Field field = c.getDeclaredField(name);
-                field.setAccessible(true);
-                Object value = field.get(item);
-                return value instanceof String ? (String) value : null;
-            } catch (Throwable t) {
-                c = c.getSuperclass();
+    private static String readString(HookEnv env, String key, Object item) {
+        try {
+            Field field = env.anchors.field(key);
+            if (field == null) {
+                return null;
             }
+            Object value = field.get(item);
+            return value instanceof String ? (String) value : null;
+        } catch (Throwable t) {
+            return null;
         }
-        return null;
     }
 
     private static void hideView(Object view) {

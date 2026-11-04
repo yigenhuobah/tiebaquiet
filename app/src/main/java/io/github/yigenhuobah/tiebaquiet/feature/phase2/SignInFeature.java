@@ -10,6 +10,7 @@ import android.util.Log;
 
 import androidx.core.content.ContextCompat;
 
+import io.github.yigenhuobah.tiebaquiet.anchor.AnchorKeys;
 import io.github.yigenhuobah.tiebaquiet.Feature;
 import io.github.yigenhuobah.tiebaquiet.FeatureRegistry;
 import io.github.yigenhuobah.tiebaquiet.HookEnv;
@@ -38,7 +39,7 @@ public final class SignInFeature {
     }
 
     public static boolean install(HookEnv env) {
-        if (env.anchors.method("sign_all_load") == null) {
+        if (env.anchors.method(AnchorKeys.SIGN_ALL_LOAD) == null) {
             Feature feature = FeatureRegistry.byKey(KEY);
             if (feature != null) {
                 feature.markSkip("锚点缺失 sign_all_load");
@@ -82,7 +83,7 @@ public final class SignInFeature {
      * 读取 EN-08 开关，关闭则忽略。
      */
     public static boolean installAlways(final HookEnv env) {
-        if (env.anchors.method("sign_all_load") == null) {
+        if (env.anchors.method(AnchorKeys.SIGN_ALL_LOAD) == null) {
             return false;
         }
         final BroadcastReceiver receiver = new BroadcastReceiver() {
@@ -158,9 +159,14 @@ public final class SignInFeature {
             @Override
             public void run() {
                 try {
+                    Class<?> activity = env.anchors.clazz(AnchorKeys.SIGN_ALL_ACTIVITY);
+                    if (activity == null) {
+                        env.module.log(Log.WARN, TAG,
+                                "sign launch skipped: anchor missing sign_all_activity");
+                        return;
+                    }
                     Intent intent = new Intent();
-                    intent.setClassName(ctx.getPackageName(),
-                            "com.baidu.tieba.signall.SignAllForumActivity");
+                    intent.setClassName(ctx.getPackageName(), activity.getName());
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     ctx.startActivity(intent);
                 } catch (Throwable t) {

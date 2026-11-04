@@ -4,6 +4,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
+import io.github.yigenhuobah.tiebaquiet.anchor.AnchorKeys;
 import io.github.yigenhuobah.tiebaquiet.HookEnv;
 
 /**
@@ -14,14 +15,14 @@ import io.github.yigenhuobah.tiebaquiet.HookEnv;
 public final class CardFilter {
 
     private static final String[] LEGO_AD_KEYS = {
-            "lego_ad_card", "lego_ad_data", "lego_ad_wrapper"
+            AnchorKeys.LEGO_AD_CARD, AnchorKeys.LEGO_AD_DATA, AnchorKeys.LEGO_AD_WRAPPER
     };
 
     private static final String[] LIVE_THREAD_KEYS = {
-            "thread_is_live_thread",
-            "thread_is_live_interview_type",
-            "thread_is_interview_live_style",
-            "thread_is_ala_live_user",
+            AnchorKeys.THREAD_IS_LIVE_THREAD,
+            AnchorKeys.THREAD_IS_LIVE_INTERVIEW_TYPE,
+            AnchorKeys.THREAD_IS_INTERVIEW_LIVE_STYLE,
+            AnchorKeys.THREAD_IS_ALA_LIVE_USER,
     };
 
     private CardFilter() {
@@ -31,17 +32,17 @@ public final class CardFilter {
         if (item == null) {
             return false;
         }
-        Class<?> nt9 = env.anchors.clazz("nt9");
+        Class<?> nt9 = env.anchors.clazz(AnchorKeys.NT9);
         if (nt9 == null || !nt9.isInstance(item)) {
             return false;
         }
 
-        Object data = invoke(env.anchors.method("nt9_d"), item);
+        Object data = invoke(env.anchors.method(AnchorKeys.NT9_D), item);
         if (data == null) {
             return false;
         }
 
-        Class<?> advert = env.anchors.clazz("advert_app_info");
+        Class<?> advert = env.anchors.clazz(AnchorKeys.ADVERT_APP_INFO);
         if (advert != null && advert.isInstance(data)) {
             return true;
         }
@@ -54,16 +55,16 @@ public final class CardFilter {
             }
         }
 
-        Class<?> thread = env.anchors.clazz("thread_data");
+        Class<?> thread = env.anchors.clazz(AnchorKeys.THREAD_DATA);
         if (thread != null && thread.isInstance(data)) {
-            Object adUrl = invoke(env.anchors.method("thread_ad_url"), data);
+            Object adUrl = invoke(env.anchors.method(AnchorKeys.THREAD_AD_URL), data);
             if (adUrl instanceof String && !((String) adUrl).isEmpty()) {
                 return true;
             }
-            if (Boolean.TRUE.equals(invoke(env.anchors.method("thread_ad_subscript"), data))) {
+            if (Boolean.TRUE.equals(invoke(env.anchors.method(AnchorKeys.THREAD_AD_SUBSCRIPT), data))) {
                 return true;
             }
-            if (Boolean.TRUE.equals(invoke(env.anchors.method("thread_is_act"), data))) {
+            if (Boolean.TRUE.equals(invoke(env.anchors.method(AnchorKeys.THREAD_IS_ACT), data))) {
                 return true;
             }
         }
@@ -74,11 +75,11 @@ public final class CardFilter {
         if (item == null) {
             return null;
         }
-        Class<?> nt9 = env.anchors.clazz("nt9");
+        Class<?> nt9 = env.anchors.clazz(AnchorKeys.NT9);
         if (nt9 == null || !nt9.isInstance(item)) {
             return null;
         }
-        Object value = invoke(env.anchors.method("nt9_b"), item);
+        Object value = invoke(env.anchors.method(AnchorKeys.NT9_B), item);
         return value instanceof String ? (String) value : null;
     }
 
@@ -95,33 +96,33 @@ public final class CardFilter {
         if (item == null) {
             return false;
         }
-        Class<?> nt9 = env.anchors.clazz("nt9");
+        Class<?> nt9 = env.anchors.clazz(AnchorKeys.NT9);
         if (nt9 == null || !nt9.isInstance(item)) {
             return false;
         }
         if (isLiveTypeKey(typeKey(env, item))) {
             return true;
         }
-        Object data = invoke(env.anchors.method("nt9_d"), item);
+        Object data = invoke(env.anchors.method(AnchorKeys.NT9_D), item);
         if (data == null) {
             return false;
         }
         // 直播卡可能是 em8 包装的 ThreadData。
-        Class<?> wrapper = env.anchors.clazz("live_thread_wrapper");
+        Class<?> wrapper = env.anchors.clazz(AnchorKeys.LIVE_THREAD_WRAPPER);
         if (wrapper != null && wrapper.isInstance(data)) {
-            Object inner = invoke(env.anchors.method("em8_get_thread"), data);
+            Object inner = invoke(env.anchors.method(AnchorKeys.EM8_GET_THREAD), data);
             if (inner != null) {
                 data = inner;
             }
         }
-        Class<?> thread = env.anchors.clazz("thread_data");
+        Class<?> thread = env.anchors.clazz(AnchorKeys.THREAD_DATA);
         if (thread == null || !thread.isInstance(data)) {
             return false;
         }
-        if (Boolean.TRUE.equals(invoke(env.anchors.method("thread_is_live"), data))) {
+        if (Boolean.TRUE.equals(invoke(env.anchors.method(AnchorKeys.THREAD_IS_LIVE), data))) {
             return true;
         }
-        if (Boolean.TRUE.equals(invoke(env.anchors.method("thread_is_interview_live"), data))) {
+        if (Boolean.TRUE.equals(invoke(env.anchors.method(AnchorKeys.THREAD_IS_INTERVIEW_LIVE), data))) {
             return true;
         }
         for (String key : LIVE_THREAD_KEYS) {
@@ -129,12 +130,12 @@ public final class CardFilter {
                 return true;
             }
         }
-        Object alaInfo = invoke(env.anchors.method("thread_ala_info"), data);
+        Object alaInfo = invoke(env.anchors.method(AnchorKeys.THREAD_ALA_INFO), data);
         if (alaInfo != null
-                && Boolean.TRUE.equals(invoke(env.anchors.method("ala_info_yy_live"), alaInfo))) {
+                && Boolean.TRUE.equals(invoke(env.anchors.method(AnchorKeys.ALA_INFO_YY_LIVE), alaInfo))) {
             return true;
         }
-        Object isLive = invoke(env.anchors.method("thread_get_is_live"), data);
+        Object isLive = invoke(env.anchors.method(AnchorKeys.THREAD_GET_IS_LIVE), data);
         return isLive instanceof Integer && ((Integer) isLive) != 0;
     }
 
