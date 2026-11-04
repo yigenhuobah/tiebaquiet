@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 0.3.5 - 2026-11-04
+
+### 修复
+
+- **新增 `config_version`**：新 `config` group 的开关写入与恢复默认在同一次 commit 写入版本 1；读到更高版本只 WARN，旧 `features` 迁移逻辑不变。
+- **设置页新增「恢复默认」**：新 group 写全部默认值、旧 group 清除功能键、本地兜底同步清理，并回读校验；远端不可用或任一步失败会明确提示。
+- **锚点表校验 `schemaVersion`**：版本不是 1 时整表 fail-open 并 WARN。
+
+### 构建
+
+- CI 改为检出 `xposed-core` 并运行 `tools/preflight.sh`；新增 xposed-core 周度跨仓漂移检查。
+
 ## 0.3.4 - 2026-11-03
 
 ### 修复

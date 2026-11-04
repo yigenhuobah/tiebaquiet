@@ -10,6 +10,7 @@ import android.os.Looper;
 import android.util.Log;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
@@ -101,6 +102,9 @@ public class SettingsFragment extends PreferenceFragmentCompat {
 
     /** 单调写令牌：每次成功落盘递增，供刷新记录读取时点后比较。仅主线程读写。 */
     private long mWriteToken;
+
+    /** 恢复默认任务在飞行中：入口置灰，避免重复提交。仅主线程读写。 */
+    private boolean mResetInProgress;
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -236,12 +240,70 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 return true;
             });
         }
+        Preference reset = findPreference("action_reset_defaults");
+        if (reset != null) {
+            // 与开关一样等 remote 确认可用后再允许点击，避免“点了必然失败”。
+            reset.setEnabled(false);
+            reset.setOnPreferenceClickListener(p -> {
+                if (mResetInProgress) {
+                    return true;
+                }
+                new AlertDialog.Builder(requireContext())
+                        .setTitle(R.string.reset_confirm_title)
+                        .setMessage(R.string.reset_confirm_message)
+                        .setNegativeButton(R.string.action_cancel, null)
+                        .setPositiveButton(R.string.reset_confirm_positive,
+                                (dialog, which) -> performReset())
+                        .show();
+                return true;
+            });
+        }
         Preference footer = findPreference("footer");
         if (footer != null) {
             String target = getString(R.string.app_target_name);
             footer.setSummary(getString(R.string.footer_restart, target)
                     + "\n" + getString(R.string.footer_compat, target, TARGET_VERSION));
         }
+    }
+
+    /**
+     * 恢复默认：后台单线程写新/旧两个 remote group，结果回主线程。
+     * 成功刷新开关；失败只提示，不乐观修改任何开关。
+     */
+    private void performReset() {
+        if (mResetInProgress) {
+            return;
+        }
+        final ConfigStore store = mStore;
+        if (store == null) {
+            Toast.makeText(requireContext(), R.string.reset_failed,
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        mResetInProgress = true;
+        Preference reset = findPreference("action_reset_defaults");
+        if (reset != null) {
+            reset.setEnabled(false);
+        }
+        // 未排队时 resetToDefaults 也会回调 false，这里不重复提示。
+        store.resetToDefaults(success -> {
+            mResetInProgress = false;
+            if (!isAdded() || getContext() == null) {
+                return;
+            }
+            Preference entry = findPreference("action_reset_defaults");
+            if (entry != null) {
+                entry.setEnabled(mStore != null && mStore.remote());
+            }
+            if (success) {
+                Toast.makeText(requireContext(), R.string.reset_success,
+                        Toast.LENGTH_SHORT).show();
+                refresh();
+            } else {
+                Toast.makeText(requireContext(), R.string.reset_failed,
+                        Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     /**
@@ -440,6 +502,12 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         Preference sign = findPreference("action_sign_in");
         if (sign != null) {
             sign.setEnabled(writable);
+        }
+
+        Preference reset = findPreference("action_reset_defaults");
+        if (reset != null) {
+            // reset 在飞行中即使 refresh 先完成也不能重新启用。
+            reset.setEnabled(writable && !mResetInProgress);
         }
 
         updateBanner(targetVersion, failedCount);

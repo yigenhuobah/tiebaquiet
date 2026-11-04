@@ -150,6 +150,11 @@
         android:title="@string/page_about" />
 
     <Preference
+        android:key="action_reset_defaults"
+        android:summary="@string/action_reset_defaults_summary"
+        android:title="@string/action_reset_defaults" />
+
+    <Preference
         android:key="footer"
         android:layout="@layout/preference_footer"
         android:selectable="false" />

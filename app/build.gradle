@@ -23,8 +23,8 @@ android {
         applicationId 'io.github.yigenhuobah.tiebaquiet'
         minSdk 29
         targetSdk 36
-        versionCode 8
-        versionName '0.3.4'
+        versionCode 9
+        versionName '0.3.5'
     }
 
     signingConfigs {
@@ -101,6 +101,9 @@ dependencies {
     implementation 'androidx.preference:preference:1.2.1'
 
     testImplementation 'junit:junit:4.13.2'
+    // android.jar 的 org.json 是桩实现；AnchorTable.load 需要真实 JSON 解析。
+    // 仅测试运行期使用，不进入 APK。
+    testImplementation 'org.json:json:20240303'
     testImplementation 'io.github.yigenhuobah:core-test:0.1.0'
     // Feature 类的方法签名引用 libxposed API；纯 JVM 单测需要它在测试运行时可见。
     testImplementation 'io.github.libxposed:api:102.0.0'
