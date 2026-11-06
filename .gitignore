@@ -3,17 +3,27 @@
 .kotlin/
 local.properties
 keystore.properties
+signing.properties
 .idea/
 .DS_Store
+Thumbs.db
 build/
 captures/
 .externalNativeBuild/
 .cxx/
 *.apk
 *.aab
+*.ap_
+*.dex
 *.keystore
 *.jks
+*.log
 
 # 发布说明/本地产物
 dist/
 __pycache__/
+tools/.dexsql-cache/
+
+# 维护文档与评审工作目录（仅本地保存，不入库）
+docs/
+.deep-review/
