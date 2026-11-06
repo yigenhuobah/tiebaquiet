@@ -347,9 +347,11 @@ for key, entry in sorted(anchors.items()):
             entry["c"].replace(".", "/"), entry["m"], entry["s"],
         )
     try:
-        count = query_count(
-            "SELECT count(*) AS c FROM %s WHERE descriptor='%s'" % (table, descriptor)
-        )
+        sql = "SELECT count(*) AS c FROM %s WHERE descriptor='%s'" % (table, descriptor)
+        if is_method:
+            # 只统计已定义方法；methods 表里 method_kind 为空的是仅被引用的方法。
+            sql += " AND method_kind IS NOT NULL"
+        count = query_count(sql)
     except RuntimeError as exc:
         fail("dexsql 查询%s %s 失败：%s"
              % ("方法" if is_method else "字段", key, exc))

@@ -191,6 +191,12 @@ ANCHORS = {
         "s": "(ILandroid/view/View;Landroid/view/ViewGroup;Lcom/baidu/tieba/v4f;Lcom/baidu/tieba/ala/livecard/holder/FrsPageAlaInsertRecLiveHolder;)Landroid/view/View;",
         "feature": "AD-05", "critical": True, "note": "FRS/吧内插入直播卡绑定（22.13.1.1 重定位）",
     },
+    # 22.13.1.1 新增：信息流语音房/开播推荐卡（头像 + “N分钟前开播 粉丝N” + 关注 + 描述）。
+    # 这是 issue #3 截图里的卡片；数据 le9，绑定后隐藏整卡。
+    "voice_room_card_bind": {
+        "c": "com.baidu.tieba.feed.component.CardFeedVoiceRoomView", "m": "v", "s": "(Lcom/baidu/tieba/le9;)V",
+        "feature": "AD-05", "critical": False, "note": "信息流语音房/开播推荐卡绑定",
+    },
     "live_item_16_set_data": {
         "c": "com.baidu.live.business.Live16Ratio9ItemView", "m": "setData", "s": "(Lcom/baidu/live/business/model/data/LiveRoomEntity;I)V",
         "feature": "AD-05", "critical": True, "note": "16:9 直播 item 绑定",

@@ -4,7 +4,13 @@
 
 ### 修复
 
-- **AD-05 补充 FRS/吧内插入直播卡**：22.13.1.1 上新增锚点 `frs_insert_live_bind`（`com.baidu.tieba.z88#s`），绑定后隐藏整卡；静态 check-mounts 60/60 方法 + 2/2 字段 + 13/13 类通过，待真机复验。
+- **AD-05 补充 FRS/吧内插入直播卡**：22.13.1.1 上新增锚点 `frs_insert_live_bind`（`com.baidu.tieba.z88#s`），绑定后隐藏整卡。
+- **AD-05 补充信息流语音房/开播推荐卡**：新增锚点 `voice_room_card_bind`（`com.baidu.tieba.feed.component.CardFeedVoiceRoomView#v`），对应 issue #3 截图里的卡片；绑定后隐藏整卡。静态 check-mounts 61/61 方法 + 2/2 字段 + 13/13 类通过，待真机复验。
+- **只看楼主/楼层倒序失败不再假健康**：字段 `lz`/`r` 写入失败时 WARN 并计入 error，不再被 `wrapHit` 计成 hit。
+
+### 构建
+
+- `check-mounts.sh` 只统计 `method_kind IS NOT NULL` 的已定义方法；`AnchorContractTest` 增加 63 anchors / 13 classes 数量守卫，防止 README 计数再次漂移。
 
 ## 0.3.5 - 2026-11-05
 

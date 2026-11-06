@@ -46,6 +46,7 @@ public final class AnchorKeys {
     public static final String ALA_LIVE_CARD_BIND = "ala_live_card_bind";
     public static final String LIVE_CARD_CREATE = "live_card_create";
     public static final String FRS_INSERT_LIVE_BIND = "frs_insert_live_bind";
+    public static final String VOICE_ROOM_CARD_BIND = "voice_room_card_bind";
     public static final String LIVE_ITEM_16_SET_DATA = "live_item_16_set_data";
     public static final String LIVE_ITEM_45_SET_DATA = "live_item_45_set_data";
     public static final String THREAD_AD_URL = "thread_ad_url";

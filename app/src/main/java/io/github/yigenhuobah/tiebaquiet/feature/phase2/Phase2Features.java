@@ -5,6 +5,7 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.widget.Toast;
 
 import java.lang.reflect.Field;
@@ -141,11 +142,16 @@ public final class Phase2Features {
                 Object builder = chain.getArgs().size() > 0 ? chain.getArgs().get(0) : null;
                 Object result = Feature.proceed(chain);
                 try {
-                    if (builder != null) {
-                        Field field = builder.getClass().getField("lz");
-                        field.set(builder, Integer.valueOf(1));
+                    if (builder == null) {
+                        throw new IllegalStateException("addLz builder is null");
                     }
-                } catch (Throwable ignored) {
+                    Field field = builder.getClass().getField("lz");
+                    field.set(builder, Integer.valueOf(1));
+                } catch (Throwable t) {
+                    // 字段写入失败时功能并未生效；抛出交给 wrapHit 记 error，
+                    // 避免宿主调用成功就被计成健康 hit。
+                    env.module.log(Log.WARN, TAG, f.code + " field write failed lz", t);
+                    throw t;
                 }
                 return result;
             }
@@ -162,11 +168,14 @@ public final class Phase2Features {
                 Object builder = chain.getArgs().size() > 0 ? chain.getArgs().get(0) : null;
                 Object result = Feature.proceed(chain);
                 try {
-                    if (builder != null) {
-                        Field field = builder.getClass().getField("r");
-                        field.set(builder, Integer.valueOf(1));
+                    if (builder == null) {
+                        throw new IllegalStateException("addR builder is null");
                     }
-                } catch (Throwable ignored) {
+                    Field field = builder.getClass().getField("r");
+                    field.set(builder, Integer.valueOf(1));
+                } catch (Throwable t) {
+                    env.module.log(Log.WARN, TAG, f.code + " field write failed r", t);
+                    throw t;
                 }
                 return result;
             }

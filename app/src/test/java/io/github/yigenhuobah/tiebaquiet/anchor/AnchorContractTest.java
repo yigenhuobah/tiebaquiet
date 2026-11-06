@@ -109,6 +109,19 @@ public class AnchorContractTest {
         assertTrue("classes 段必须是对象", json.get("classes") instanceof Map);
     }
 
+    /**
+     * 数量守卫：新增/删除锚点时必须同步 README 的计数描述。
+     * 不改这里就让单测失败，避免 README 停留在旧数字（2026-11-06 前为 57+7）。
+     */
+    @Test
+    public void anchorCountMatchesExpected() throws Exception {
+        Map<String, Object> json = loadAnchors();
+        assertEquals("anchors 数量变化时必须同步 README/check-mounts 期望", 63,
+                object(json.get("anchors")).size());
+        assertEquals("classes 数量变化时必须同步 README", 13,
+                object(json.get("classes")).size());
+    }
+
     @Test
     public void anchorKeysAndTableAreBidirectional() throws Exception {
         Map<String, Object> json = loadAnchors();

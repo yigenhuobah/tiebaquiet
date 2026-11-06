@@ -289,6 +289,24 @@ public final class Phase1Features {
             f.markSkip("锚点缺失 frs_insert_live_bind");
         }
 
+        // 信息流语音房/开播推荐卡：绑定数据后隐藏整卡（issue #3 截图里的卡片）。
+        Method voiceRoom = env.anchors.method(AnchorKeys.VOICE_ROOM_CARD_BIND);
+        if (voiceRoom != null) {
+            boolean installed = f.hook(env, voiceRoom, "voice_room_card_bind",
+                    new XposedInterface.Hooker() {
+                        @Override
+                        public Object intercept(XposedInterface.Chain chain) throws Throwable {
+                            Object view = chain.getThisObject();
+                            Object result = Feature.proceed(chain);
+                            env.module.log(Log.INFO, Feature.TAG,
+                                    f.code + " live filter: voice room card bind");
+                            hideView(view);
+                            return result;
+                        }
+                    });
+            any = any || installed;
+        }
+
         // 直播 SDK 的卡片 item：绑定数据后隐藏并压成 0 高。
         for (String key : LIVE_ITEM_KEYS) {
             Method m = env.anchors.method(key);

@@ -277,6 +277,14 @@
       "critical": true,
       "note": "FRS/吧内插入直播卡绑定（22.13.1.1 重定位）"
     },
+    "voice_room_card_bind": {
+      "c": "com.baidu.tieba.feed.component.CardFeedVoiceRoomView",
+      "m": "v",
+      "s": "(Lcom/baidu/tieba/le9;)V",
+      "feature": "AD-05",
+      "critical": false,
+      "note": "信息流语音房/开播推荐卡绑定"
+    },
     "live_item_16_set_data": {
       "c": "com.baidu.live.business.Live16Ratio9ItemView",
       "m": "setData",
