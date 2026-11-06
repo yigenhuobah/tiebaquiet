@@ -183,6 +183,14 @@ ANCHORS = {
         "c": "com.baidu.tieba.nsb", "m": "a", "s": "(Landroid/view/ViewGroup;I)Landroid/view/View;",
         "feature": "AD-05", "critical": True, "note": "直播推荐卡创建",
     },
+    # 22.13.1.1 新增：FRS/吧内插入直播卡（旧版 v88#u / t2f#setFrsInsertLiveData 已改名）。
+    # 数据源 a5f.setFrsInsertLiveData(v4f)，适配器 z88.s(...) 把 v4f 绑到 Holder；
+    # 绑定后隐藏返回的 item view，避免宿主重新 bind 把 GONE 改回可见。
+    "frs_insert_live_bind": {
+        "c": "com.baidu.tieba.z88", "m": "s",
+        "s": "(ILandroid/view/View;Landroid/view/ViewGroup;Lcom/baidu/tieba/v4f;Lcom/baidu/tieba/ala/livecard/holder/FrsPageAlaInsertRecLiveHolder;)Landroid/view/View;",
+        "feature": "AD-05", "critical": True, "note": "FRS/吧内插入直播卡绑定（22.13.1.1 重定位）",
+    },
     "live_item_16_set_data": {
         "c": "com.baidu.live.business.Live16Ratio9ItemView", "m": "setData", "s": "(Lcom/baidu/live/business/model/data/LiveRoomEntity;I)V",
         "feature": "AD-05", "critical": True, "note": "16:9 直播 item 绑定",
@@ -825,6 +833,7 @@ def main():
 
     payload = {
         "schemaVersion": 1,
+        "app": "com.baidu.tieba",
         "appVersion": app_version,
         "versionCode": version_code_value,
         "generatedBy": "tools/gen_anchors.py",

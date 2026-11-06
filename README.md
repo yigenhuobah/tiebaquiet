@@ -101,7 +101,7 @@
 ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleRelease --no-daemon
 ```
 
-当前共 **153 个 JVM 单测**（`app/src/test`），CI 在 push 到 main 和 PR 时运行单测与 lint。
+当前共 **205 个 JVM 单测**（`app/src/test`），CI 在 push 到 main 和 PR 时运行单测与 lint。
 
 本地预检：`bash tools/preflight.sh`；锚点体检：`bash tools/check-mounts.sh --apk <贴吧apk>`（缺省自动探测；无 DexSQL 时进入降级模式，只校验锚点表完整性）。
 
@@ -111,7 +111,7 @@
 
 - `TiebaQuietModule`：libxposed 入口，仅注入贴吧主进程；安装完成后启动诊断回传。
 - `Feature` / `FeatureRegistry`：25 个功能的编号、remote key、文案、默认值、分组与安装器。
-- `anchor/AnchorTable`：读取打包进 APK 的 `anchors.json`（当前 57 个方法锚点 + 7 个类锚点），运行时反射校验类/方法是否存在；缺失时只禁用对应功能，版本不匹配只告警不阻断。
+- `anchor/AnchorTable`：读取打包进 APK 的 `anchors.json`（当前 60 个方法锚点 + 2 个字段锚点 + 13 个类锚点），运行时反射校验类/方法是否存在；缺失时只禁用对应功能，版本不匹配只告警不阻断。
 - `feature/phase1|2|3`：各功能的 hook 安装器；`CardFilter` / `FeedCardSweeper` 为信息流过滤公共逻辑。
 - `Config` / `ConfigStore` / `ConfigMigration`：目标进程读、模块 App 写，新分组 `config` 优先、旧分组 `features` 兜底。
 - `ServiceBridge`：XposedService 绑定、占位 binder 过滤与 remote prefs 获取。
@@ -130,7 +130,7 @@ python tools/gen_anchors.py --apk <新版本apk> --out app/src/main/resources/an
 
 | 宿主版本 | 状态 | 说明 |
 |---|---|---|
-| 22.13.1.1（369950981） | 已适配 | 当前声明版本；锚点表 57 个方法 + 7 个类 |
+| 22.13.1.1（369950981） | 已适配 | 当前声明版本；锚点表 60 个方法 + 2 个字段 + 13 个类 |
 | 22.12.1.0（369885440） | 历史适配，不再保证 | 0.3.0 及以前使用；22.13.1.1 混淆名大洗牌后需重新生成锚点 |
 
 - 仅声明支持表中「已适配」版本；混淆类（`fz8` 等）通过字符串锚点在 `gen_anchors.py` 中定位，跨版本需重新生成。
@@ -139,9 +139,10 @@ python tools/gen_anchors.py --apk <新版本apk> --out app/src/main/resources/an
 - “启动任务精简”曾 hook `LaunchTask.run()`，但它是所有启动任务的模板方法，跳过会导致 Fresco 图片管线未初始化、贴吧启动即闪退，已移除。
 - 修改开关后需要强制停止并重新打开贴吧生效（RemotePreferences 在进程启动时读取）。
 
-### 已知限制（0.3.3）
+### 已知限制（0.3.5）
 
-- **22.13.1.1 锚点已重生成，未逐项真机复验**：2026-10-31 基于 22.13.1.1（versionCode 369950981）APK 重新定位 14 处混淆锚点并重生成 anchors.json（55 方法 + 7 类全命中，0 MISSING）；功能行为未逐项真机回归。2026-11-01 追加：UI-03 注入链 `k()`/`getInnerWebView` 收编为锚点 `person_tab_web_k`/`tbwebview_inner`（57 方法 + 7 类），两个描述符已对 22.13.1.1 dex 逐一核实；`gen_anchors.py` 尚未携带 APK 重新全量校验，下次重生成时以 0 MISSING 为准。
+- **22.13.1.1 锚点已重生成，未逐项真机复验**：2026-10-31 基于 22.13.1.1（versionCode 369950981）APK 重新定位 14 处混淆锚点并重生成 anchors.json（55 方法 + 7 类全命中，0 MISSING）；功能行为未逐项真机回归。2026-11-01 追加 UI-03 注入链 `k()`/`getInnerWebView`（`person_tab_web_k`/`tbwebview_inner`）。2026-11-06 追加 FRS/吧内插入直播卡 `frs_insert_live_bind`（`z88#s`），当前 60 方法 + 2 字段 + 13 类；`gen_anchors.py` 全量重生成仍待补 dexsql/APK 校验，下次重生成时以 0 MISSING 为准。
+- **FRS/吧内插入直播卡（AD-05）**：0.3.3–0.3.5 未覆盖这条链路（`v88`/`t2f` 在 22.13.1.1 已改名）；源码已补 `frs_insert_live_bind`（`z88#s`），待下一版真机验证。
 
 - **一键签到需 EN-08 开启**：关闭 EN-08 时接收器忽略签到广播，设置页按钮提示“请先开启”；点击按钮不再静默改写开关。
 - **签到页可打开，但本账号无法完成签到**：2026-10-29 真机（0.2.1）已触发并打开贴吧签到页；页面提示「吧内等级 7 级以上才可使用」，当前账号各吧为 1–6 级，因此没有实际完成签到。这是贴吧的账号等级门槛，不是模块失败。

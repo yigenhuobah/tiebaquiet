@@ -270,6 +270,25 @@ public final class Phase1Features {
             any = any || installed;
         }
 
+        // FRS/吧内插入直播卡：绑定数据后隐藏整卡（22.13.1.1 的 z88#s）。
+        Method frsBind = env.anchors.method(AnchorKeys.FRS_INSERT_LIVE_BIND);
+        if (frsBind != null) {
+            boolean installed = f.hook(env, frsBind, "frs_insert_live_bind",
+                    new XposedInterface.Hooker() {
+                        @Override
+                        public Object intercept(XposedInterface.Chain chain) throws Throwable {
+                            Object result = Feature.proceed(chain);
+                            env.module.log(Log.INFO, Feature.TAG,
+                                    f.code + " live filter: frs insert card bind");
+                            hideView(result);
+                            return result;
+                        }
+                    });
+            any = any || installed;
+        } else {
+            f.markSkip("锚点缺失 frs_insert_live_bind");
+        }
+
         // 直播 SDK 的卡片 item：绑定数据后隐藏并压成 0 高。
         for (String key : LIVE_ITEM_KEYS) {
             Method m = env.anchors.method(key);

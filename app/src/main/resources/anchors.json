@@ -269,6 +269,14 @@
       "critical": true,
       "note": "直播推荐卡创建"
     },
+    "frs_insert_live_bind": {
+      "c": "com.baidu.tieba.z88",
+      "m": "s",
+      "s": "(ILandroid/view/View;Landroid/view/ViewGroup;Lcom/baidu/tieba/v4f;Lcom/baidu/tieba/ala/livecard/holder/FrsPageAlaInsertRecLiveHolder;)Landroid/view/View;",
+      "feature": "AD-05",
+      "critical": true,
+      "note": "FRS/吧内插入直播卡绑定（22.13.1.1 重定位）"
+    },
     "live_item_16_set_data": {
       "c": "com.baidu.live.business.Live16Ratio9ItemView",
       "m": "setData",
